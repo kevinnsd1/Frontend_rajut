@@ -355,8 +355,13 @@ export default function PengirimanPage() {
           html5QrCode.start(
             { facingMode: "environment" },
             { 
-              fps: 15, 
-              qrbox: { width: 300, height: 150 },
+              fps: 10, 
+              qrbox: { width: 250, height: 100 },
+              formatsToSupport: [
+                (window as any).Html5QrcodeSupportedFormats.CODE_128,
+                (window as any).Html5QrcodeSupportedFormats.QR_CODE,
+                (window as any).Html5QrcodeSupportedFormats.EAN_13
+              ],
               useBarCodeDetectorIfSupported: true
             },
             (decodedText: string) => {
@@ -612,7 +617,7 @@ export default function PengirimanPage() {
       />
 
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Logistik & Pengiriman
@@ -622,7 +627,7 @@ export default function PengirimanPage() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full md:w-auto [&>button]:flex-1 md:[&>button]:flex-none">
           <Button
             onClick={() => {
               setIsRegisterOpen(true);
@@ -645,7 +650,7 @@ export default function PengirimanPage() {
         </div>
 
         <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
-          <DialogContent className="rounded-3xl border-none shadow-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="rounded-3xl border-none shadow-2xl max-h-[90vh] overflow-y-auto w-[95vw] md:max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">
                 Daftarkan Resi Baru
