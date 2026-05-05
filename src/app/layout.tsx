@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import QueryProvider from "@/components/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Web Rajut - Admin Dashboard",
-  description: "Dashboard admin untuk manajemen web rajut",
+  title: "QueenyLook - Cozy Modern Fashion",
+  description: "Dashboard manajemen stok dan pengiriman untuk QueenyLook",
 };
 
 export default function RootLayout({
@@ -26,9 +27,10 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full bg-background text-foreground">
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

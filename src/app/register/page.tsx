@@ -9,15 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/auth";
 import { Loader2 } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { StatusModal, StatusModalType } from "@/components/ui/status-modal";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -27,7 +19,7 @@ export default function RegisterPage() {
   
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<"success" | "error">("success");
+  const [modalType, setModalType] = useState<StatusModalType>("success");
   const [modalMessage, setModalMessage] = useState("");
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -64,18 +56,18 @@ export default function RegisterPage() {
           <form onSubmit={handleRegister}>
             <CardHeader className="space-y-1 text-center">
               <div className="flex justify-center mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white">
-                  <span className="font-bold text-lg">VM</span>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                  <span className="font-bold text-xl">QL</span>
                 </div>
               </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">Daftar Akun Baru</CardTitle>
-              <CardDescription>
-                Isi data di bawah ini untuk membuat akun VogueManage
+              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Daftar Akun Baru</CardTitle>
+              <CardDescription className="text-slate-500">
+                Isi data di bawah ini untuk membuat akun QueenyLook
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
-                <Label htmlFor="username" className="text-sm font-semibold">Username</Label>
+                <Label htmlFor="username" className="text-sm font-semibold text-slate-700">Username</Label>
                 <Input 
                   id="username" 
                   type="text" 
@@ -83,23 +75,23 @@ export default function RegisterPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required 
-                  className="h-11"
+                  className="h-11 border-primary/20 focus:border-primary transition-colors rounded-xl"
                 />
               </div>
               <div className="space-y-3">
-                <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
+                <Label htmlFor="password" className="text-sm font-semibold text-slate-700">Password</Label>
                 <Input 
                   id="password" 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
-                  className="h-11"
+                  className="h-11 border-primary/20 focus:border-primary transition-colors rounded-xl"
                 />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-5 pt-2">
-              <Button type="submit" className="w-full bg-black text-white hover:bg-black/80 h-11 text-md font-semibold" disabled={isLoading}>
+              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:opacity-90 h-11 text-md font-bold rounded-xl shadow-lg shadow-primary/10 transition-all active:scale-[0.98]" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -111,7 +103,7 @@ export default function RegisterPage() {
               </Button>
               <div className="text-center text-sm text-muted-foreground">
                 Sudah punya akun?{" "}
-                <Link href="/login" className="font-semibold text-black hover:underline">
+                <Link href="/login" className="font-bold text-primary hover:underline">
                   Masuk di sini
                 </Link>
               </div>
@@ -120,32 +112,15 @@ export default function RegisterPage() {
         </Card>
       </div>
 
-      <AlertDialog open={modalOpen} onOpenChange={setModalOpen}>
-        <AlertDialogContent className="sm:max-w-md flex flex-col items-center text-center p-8">
-          <AlertDialogHeader className="flex flex-col items-center w-full sm:text-center">
-            <div className="flex justify-center mb-4">
-              <div className={`flex h-16 w-16 items-center justify-center rounded-full ${modalType === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {modalType === 'success' ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
-                )}
-              </div>
-            </div>
-            <AlertDialogTitle className="text-2xl font-bold">
-              {modalType === "success" ? "Berhasil!" : "Gagal"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-md text-slate-500 mt-2">
-              {modalMessage}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-center w-full mt-6">
-            <AlertDialogAction onClick={handleModalClose} className={`w-full sm:w-auto ${modalType === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
-              {modalType === "success" ? "Ke Halaman Login" : "Tutup"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <StatusModal
+        isOpen={modalOpen}
+        onOpenChange={setModalOpen}
+        type={modalType}
+        title={modalType === "success" ? "Berhasil!" : "Gagal"}
+        description={modalMessage}
+        onAction={handleModalClose}
+        actionText={modalType === "success" ? "Ke Halaman Login" : "Tutup"}
+      />
     </>
   );
 }

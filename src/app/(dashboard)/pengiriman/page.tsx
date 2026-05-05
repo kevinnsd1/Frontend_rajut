@@ -1,3 +1,8 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Script from "next/script";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -8,210 +13,1019 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Plus, 
-  Printer, 
-  MapPin, 
+import {
+  Plus,
   Truck,
-  ChevronDown
+  Loader2,
+  AlertCircle,
+  Search,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  MapPin,
+  Package,
+  ScanLine,
+  X,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { apiService } from "@/services/api";
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-export default function PengirimanPage() {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Shipment {
+  id?: string | number;
+  item_code?: string;
+  resi_number?: string; // nama field asli di database
+  courier?: string;
+  last_status?: string; // nama field status di database
+  is_delivered?: boolean | number;
+}
+
+interface TrackingEvent {
+  status?: string;
+  title?: string;
+  description?: string;
+  time?: string;
+  date?: string;
+}
+
+interface TrackingResponse {
+  history?: TrackingEvent[];
+  status?: string;
+  success?: boolean;
+}
+
+interface RegisterForm {
+  item_code: string;
+  resi: string;
+  courier: string;
+}
+
+const COURIERS = [
+  { value: "jne", label: "JNE Express" },
+  { value: "jnt", label: "J&T Express" },
+  { value: "sicepat", label: "SiCepat" },
+  { value: "tiki", label: "TIKI" },
+  { value: "pos", label: "POS Indonesia" },
+  { value: "ninja", label: "Ninja Xpress" },
+];
+
+const DEFAULT_FORM: RegisterForm = { item_code: "", resi: "", courier: "jne" };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function detectCourier(resi: string): string | undefined {
+  if (!resi) return undefined;
+  const upper = resi.toUpperCase().trim();
+  if (upper.startsWith("JX") || upper.startsWith("JP") || upper.startsWith("JD") || upper.startsWith("J&T")) return "jnt";
+  if (upper.startsWith("JNE") || (upper.length === 15 && /^\d+$/.test(upper))) return "jne";
+  if (upper.startsWith("00") && upper.length >= 11 && upper.length <= 12) return "sicepat";
+  if (upper.startsWith("NLID") || upper.startsWith("NINJA")) return "ninja";
+  if (upper.endsWith("ID") || (upper.length === 11 && /^\d+$/.test(upper))) return "pos";
+  return undefined;
+}
+
+function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
+  const latestText = (
+    history?.[0]?.description ||
+    history?.[0]?.status ||
+    history?.[0]?.title ||
+    ""
+  ).toLowerCase();
+
+  if (
+    latestText.includes("returned") ||
+    latestText.includes("return") ||
+    latestText.includes("retur")
+  )
+    return "RETURNED";
+  if (latestText.includes("delivered") || latestText.includes("diterima"))
+    return "DELIVERED";
+  if (
+    latestText.includes("will be delivered") ||
+    latestText.includes("out for delivery")
+  )
+    return "DIKIRIM";
+  if (
+    latestText.includes("arrived") ||
+    latestText.includes("departed") ||
+    latestText.includes("process") ||
+    latestText.includes("transit")
+  )
+    return "DIPROSES";
+
+  if (!raw) return "PENDING";
+  const lower = raw.toLowerCase();
+  if (lower.includes("delivered") || lower.includes("diterima"))
+    return "DELIVERED";
+  if (lower.includes("return") || lower.includes("retur")) return "RETURNED";
+  if (lower.includes("on delivery")) return "DIKIRIM";
+  if (
+    lower.includes("on process") ||
+    lower.includes("transit") ||
+    lower.includes("process")
+  )
+    return "DIPROSES";
+  return "PENDING";
+}
+
+function translateDescription(text?: string): string {
+  if (!text) return "";
+  const patterns: [RegExp, string][] = [
+    [/Package has been arrived at (.+)/i, "Paket telah tiba di $1."],
+    [/Package has been returned to (.+)/i, "Paket telah dikembalikan ke $1."],
+    [/Package will be departed to (.+)/i, "Paket akan dikirim ke $1."],
+    [
+      /Package will be delivered to your address by (.+)/i,
+      "Paket akan diantarkan ke alamat Anda oleh $1.",
+    ],
+    [
+      /Package has been processed at (.+?) by (.+)/i,
+      "Paket telah diproses di $1 oleh $2.",
+    ],
+    [
+      /Shipment process is being delayed for the reason:\s*(.+)/i,
+      "Pengiriman ditunda dengan alasan: $1.",
+    ],
+    [
+      /Package is on return shipment by (.+)/i,
+      "Paket sedang dalam proses pengembalian oleh $1.",
+    ],
+    [/Package has been picked up by (.+)/i, "Paket telah diambil oleh $1."],
+    [
+      /Package is out for delivery/i,
+      "Paket sedang dalam perjalanan pengiriman ke alamat Anda.",
+    ],
+    [/Package has been delivered/i, "Paket telah berhasil diterima."],
+    [
+      /Package has been received at origin/i,
+      "Paket telah diterima di lokasi asal.",
+    ],
+    [/Package has been created/i, "Data paket telah dibuat."],
+  ];
+  for (const [pattern, replacement] of patterns) {
+    if (pattern.test(text)) return text.replace(pattern, replacement);
+  }
+  return text;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status?: string }) {
+  const map: Record<string, string> = {
+    DELIVERED: "text-emerald-600 bg-emerald-50 border-emerald-100",
+    DIPROSES: "text-blue-600 bg-blue-50 border-blue-100",
+    DIKIRIM: "text-violet-600 bg-violet-50 border-violet-100",
+    RETURNED: "text-orange-600 bg-orange-50 border-orange-100",
+    PENDING: "text-slate-500 bg-slate-50 border-slate-200",
+  };
+  const label: Record<string, string> = {
+    DELIVERED: "Terkirim",
+    DIPROSES: "Diproses",
+    DIKIRIM: "Dikirim",
+    RETURNED: "Diretur",
+    PENDING: "Pending",
+  };
+  const key = status?.toUpperCase() || "PENDING";
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pengiriman</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage and track your fashion logistics.
+    <span
+      className={`inline-flex items-center justify-center text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm ${map[key] || map.PENDING}`}
+    >
+      {label[key] || status || "Pending"}
+    </span>
+  );
+}
+
+function TrackingTimeline({ resi }: { resi: string }) {
+  const { data, isLoading } = useQuery<TrackingResponse>({
+    queryKey: ["tracking", resi],
+    queryFn: () => apiService.trackDirect(resi),
+    staleTime: 1000 * 60 * 5, // cache 5 menit, tidak refetch jika sudah ada
+  });
+
+  if (isLoading) {
+    return (
+      <div className="py-12 flex flex-col items-center gap-3">
+        <Loader2 className="h-7 w-7 animate-spin text-primary/30" />
+        <p className="text-[10px] font-bold text-primary/40 uppercase tracking-widest">
+          Melacak Paket...
+        </p>
+      </div>
+    );
+  }
+  if (!data?.history || data.history.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <Package className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+        <p className="text-xs text-muted-foreground italic">
+          Tidak ada riwayat perjalanan tersedia.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="relative pl-6 space-y-7 before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-primary/10 max-h-[60vh] overflow-y-auto pr-2">
+      {data.history.map((event, i) => (
+        <div key={i} className="relative">
+          <span
+            className={`absolute -left-[24px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white border-2 ${i === 0 ? "bg-primary border-primary shadow-lg shadow-primary/20" : "bg-white border-primary/20"}`}
+          />
+          <p
+            className={`text-xs ${i === 0 ? "font-black text-foreground" : "font-medium text-muted-foreground/80"} leading-relaxed`}
+          >
+            {translateDescription(
+              event.status || event.title || event.description,
+            )}
+          </p>
+          <p className="text-[10px] text-muted-foreground/50 font-semibold mt-1 tracking-tight">
+            {event.time || event.date}
           </p>
         </div>
-        <Button className="bg-black text-white hover:bg-black/80">
-          <Plus className="mr-2 h-4 w-4" /> New Shipment
-        </Button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function PengirimanPage() {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+  const [detailItem, setDetailItem] = useState<Shipment | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerData, setRegisterData] = useState<RegisterForm>(DEFAULT_FORM);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // ── React Query: daftar pengiriman ────────────────────────────────────────
+  const {
+    data: shipments = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery<Shipment[]>({
+    queryKey: ["shipments"],
+    queryFn: () => apiService.getShipmentList(),
+    refetchInterval: 1000 * 60 * 10, // auto-refresh setiap 10 menit
+    refetchIntervalInBackground: false, // hanya refresh jika tab aktif
+  });
+
+  // ── Auto-save retur untuk paket RETURNED yang sudah ada di cache ──────────
+  useEffect(() => {
+    if (!shipments.length) return;
+    shipments.forEach(async (item) => {
+      const resi = item.resi_number;
+      if (!resi) return;
+      const cached = queryClient.getQueryData<TrackingResponse>([
+        "tracking",
+        resi,
+      ]);
+      if (!cached) return;
+      const liveStatus = parseLiveStatus(cached.status, cached.history);
+      if (liveStatus === "RETURNED") {
+        const latestDesc =
+          cached.history?.[0]?.description ||
+          cached.history?.[0]?.status ||
+          "Paket dikembalikan";
+        try {
+          await apiService.saveReturn({
+            sku_code: item.item_code || resi,
+            product_name: item.item_code || resi,
+            reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
+            status: "PENDING",
+          });
+          queryClient.invalidateQueries({ queryKey: ["returns"] });
+        } catch (_) {
+          /* duplikat diabaikan */
+        }
+      }
+    });
+  }, [shipments]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Scanner Effect ────────────────────────────────────────────────────────
+  useEffect(() => {
+    let html5QrcodeScanner: any = null;
+    let timer: NodeJS.Timeout;
+
+    if (
+      !isScanning ||
+      typeof window === "undefined" ||
+      !(window as any).Html5QrcodeScanner
+    )
+      return;
+
+    const initScanner = () => {
+      const readerElement = document.getElementById("reader");
+      if (readerElement) {
+        try {
+          html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: { width: 250, height: 100 } },
+            false,
+          );
+          html5QrcodeScanner.render(
+            (decodedText: string) => {
+              const detectedCourier = detectCourier(decodedText);
+              setRegisterData((prev) => ({
+                ...prev,
+                resi: decodedText,
+                ...(detectedCourier ? { courier: detectedCourier } : {}),
+              }));
+              setIsScanning(false);
+              if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(console.error);
+              }
+            },
+            (error: any) => {
+              // ignore scan errors
+            },
+          );
+        } catch (err) {
+          console.error("Scanner init error:", err);
+        }
+      } else {
+        // Retry later
+        timer = setTimeout(initScanner, 100);
+      }
+    };
+
+    initScanner();
+
+    return () => {
+      clearTimeout(timer);
+      if (html5QrcodeScanner) {
+        try {
+          html5QrcodeScanner.clear().catch(console.error);
+        } catch (e) {}
+      }
+    };
+  }, [isScanning]);
+
+  useEffect(() => {
+    if (!isRegisterOpen && isScanning) {
+      setIsScanning(false);
+    }
+  }, [isRegisterOpen, isScanning]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  async function openDetail(item: Shipment) {
+    setDetailItem(item);
+    setIsDetailOpen(true);
+
+    const resi = item.resi_number;
+    if (!resi) return;
+
+    // Jika belum ada cache, fetch sekarang
+    const existing = queryClient.getQueryData<TrackingResponse>([
+      "tracking",
+      resi,
+    ]);
+    if (!existing) {
+      try {
+        const trackingData = await apiService.trackDirect(
+          resi,
+          item.item_code || undefined,
+        );
+        queryClient.setQueryData(["tracking", resi], trackingData);
+
+        // Deteksi retur otomatis
+        const liveStatus = parseLiveStatus(
+          trackingData.status,
+          trackingData.history,
+        );
+        if (liveStatus === "RETURNED") {
+          const latestDesc =
+            trackingData.history?.[0]?.description ||
+            trackingData.history?.[0]?.status ||
+            "Paket dikembalikan";
+          try {
+            await apiService.saveReturn({
+              sku_code: item.item_code || resi,
+              product_name: item.item_code || resi,
+              reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
+              status: "PENDING",
+            });
+            queryClient.invalidateQueries({ queryKey: ["returns"] });
+          } catch (_) {
+            /* abaikan duplikat */
+          }
+        }
+      } catch (err) {
+        console.warn("[Detail] track gagal:", err);
+      }
+    } else {
+      // Cache sudah ada — cek apakah perlu save retur
+      const liveStatus = parseLiveStatus(existing.status, existing.history);
+      if (liveStatus === "RETURNED") {
+        const latestDesc =
+          existing.history?.[0]?.description ||
+          existing.history?.[0]?.status ||
+          "Paket dikembalikan";
+        try {
+          await apiService.saveReturn({
+            sku_code: item.item_code || resi,
+            product_name: item.item_code || resi,
+            reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
+            status: "PENDING",
+          });
+          queryClient.invalidateQueries({ queryKey: ["returns"] });
+        } catch (_) {
+          /* abaikan duplikat */
+        }
+      }
+    }
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+    setRegisterLoading(true);
+
+    // Simpan data sementara untuk dipakai di modal detail
+    const resiToTrack = registerData.resi;
+    const itemCode = registerData.item_code;
+    const courierUsed = registerData.courier;
+
+    try {
+      // 1. Simpan ke database (Sangat cepat sekarang karena background task)
+      await apiService.registerResi(registerData);
+
+      // 2. Tutup modal pendaftaran & bersihkan form
+      setIsRegisterOpen(false);
+      setRegisterData(DEFAULT_FORM);
+
+      // 3. LANGSUNG BUKA MODAL DETAIL (Sekaligus pasang data placeholder)
+      const placeholderItem: Shipment = {
+        item_code: itemCode,
+        resi_number: resiToTrack,
+        courier: courierUsed,
+        last_status: "PENDING",
+        is_delivered: false,
+      };
+      setDetailItem(placeholderItem);
+      setIsDetailOpen(true);
+
+      // 4. Refresh list di background agar tabel terupdate
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+
+      // 5. Jalankan tracking live (di background modal yang sudah terbuka)
+      try {
+        const trackingData = await apiService.trackDirect(
+          resiToTrack,
+          itemCode || undefined,
+        );
+
+        // Update cache — ini akan otomatis mengupdate modal detail yang sedang terbuka
+        queryClient.setQueryData(["tracking", resiToTrack], trackingData);
+
+        // Refresh list lagi untuk update badge di tabel
+        queryClient.invalidateQueries({ queryKey: ["shipments"] });
+
+        // 6. Simpan ke Retur jika terdeteksi
+        const liveStatus = parseLiveStatus(
+          trackingData.status,
+          trackingData.history,
+        );
+        if (liveStatus === "RETURNED") {
+          const latestDesc =
+            trackingData.history?.[0]?.description || "Paket Diretur";
+          try {
+            await apiService.saveReturn({
+              sku_code: itemCode || resiToTrack,
+              product_name: itemCode || resiToTrack,
+              reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
+              status: "PENDING",
+            });
+            queryClient.invalidateQueries({ queryKey: ["returns"] });
+          } catch (_) {}
+        }
+      } catch (trackErr) {
+        console.warn("[Register] Gagal update data live:", trackErr);
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Gagal mendaftarkan resi");
+    } finally {
+      setRegisterLoading(false);
+    }
+  }
+
+  function openDeleteConfirm(e: React.MouseEvent, item_code: string) {
+    e.stopPropagation();
+    setItemToDelete(item_code);
+    setIsDeleteOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!itemToDelete) return;
+    setDeleteLoading(true);
+    try {
+      await apiService.deleteShipment(itemToDelete);
+      setIsDeleteOpen(false);
+      setShowSuccess(true);
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus data");
+    } finally {
+      setDeleteLoading(false);
+      setItemToDelete(null);
+    }
+  }
+
+  const filtered = shipments.filter(
+    (s) =>
+      (s.item_code || "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.resi_number || "").toLowerCase().includes(search.toLowerCase()),
+  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const detailResi = detailItem?.resi_number;
+
+  // Status live dari cache React Query
+  const cachedTracking = detailResi
+    ? queryClient.getQueryData<TrackingResponse>(["tracking", detailResi])
+    : undefined;
+  const liveStatus = cachedTracking
+    ? parseLiveStatus(cachedTracking.status, cachedTracking.history)
+    : parseLiveStatus(detailItem?.last_status);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8">
+      <Script
+        src="https://unpkg.com/html5-qrcode"
+        strategy="afterInteractive"
+      />
+
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Logistik & Pengiriman
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Kelola dan pantau pengiriman produk QueenyLook.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            onClick={() => {
+              setIsRegisterOpen(true);
+              setIsScanning(false);
+            }}
+            className="bg-white text-primary border border-primary/20 hover:bg-primary/5 rounded-xl shadow-sm font-bold"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Input Manual
+          </Button>
+          <Button
+            onClick={() => {
+              setIsRegisterOpen(true);
+              setIsScanning(true);
+            }}
+            className="bg-primary text-primary-foreground hover:opacity-90 rounded-xl shadow-lg shadow-primary/20 font-bold"
+          >
+            <ScanLine className="mr-2 h-4 w-4" /> Scan Kamera
+          </Button>
+        </div>
+
+        <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+          <DialogContent className="rounded-3xl border-none shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold">
+                Daftarkan Resi Baru
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2">
+              {isScanning && (
+                <div className="rounded-2xl border-2 border-primary/10 overflow-hidden bg-slate-50 relative animate-in fade-in zoom-in-95 duration-200 flex flex-col items-center justify-center text-center p-4 mb-6">
+                  <p className="text-xs font-bold text-primary/60 uppercase tracking-widest mb-3">
+                    Arahkan Kamera ke Barcode Resi
+                  </p>
+                  <div
+                    id="reader"
+                    className="w-full [&>div]:border-none [&_video]:rounded-xl [&_img]:mx-auto [&_button]:mx-auto [&_span]:text-center"
+                  ></div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsScanning(false)}
+                    className="mt-4 text-xs font-bold text-muted-foreground hover:text-rose-500"
+                  >
+                    Tutup Kamera
+                  </Button>
+                </div>
+              )}
+
+              <form onSubmit={handleRegister} className="space-y-5">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Kode Barang
+                  </Label>
+                  <Input
+                    required
+                    autoFocus
+                    placeholder="Contoh: QL-JKT-001"
+                    className="rounded-xl border-primary/10"
+                    value={registerData.item_code}
+                    onChange={(e) =>
+                      setRegisterData({
+                        ...registerData,
+                        item_code: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Nomor Resi
+                  </Label>
+                  <Input
+                    required
+                    placeholder="Contoh: JNE123456789"
+                    className="rounded-xl border-primary/10"
+                    value={registerData.resi}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const detected = detectCourier(val);
+                      setRegisterData({
+                        ...registerData,
+                        resi: val,
+                        ...(detected ? { courier: detected } : {}),
+                      });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Kurir
+                  </Label>
+                  <Select
+                    value={registerData.courier}
+                    onValueChange={(val) =>
+                      setRegisterData({ ...registerData, courier: val })
+                    }
+                  >
+                    <SelectTrigger className="w-full h-12 rounded-xl border-primary/10 bg-white px-4 font-semibold shadow-sm">
+                      <SelectValue placeholder="Pilih Kurir" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-primary/5 shadow-xl bg-white">
+                      {COURIERS.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <DialogFooter className="mt-2">
+                  <Button
+                    type="submit"
+                    disabled={registerLoading}
+                    className="w-full bg-primary text-primary-foreground font-bold rounded-xl h-12 shadow-lg shadow-primary/20 hover:opacity-90 transition-all"
+                  >
+                    {registerLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      "Daftarkan Pengiriman"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left Column: Table */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex gap-2 p-1 bg-slate-100 rounded-full">
-              <button className="px-4 py-1.5 text-xs font-medium bg-black text-white rounded-full">All</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-full">Dalam Perjalanan</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-full">Terkirim</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-full">Tertunda</button>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span>Sort by:</span>
-              <button className="flex items-center gap-1 font-medium text-slate-900 border px-3 py-1.5 rounded-md bg-white">
-                Date (Newest) <ChevronDown className="h-4 w-4" />
-              </button>
-            </div>
+      {/* Table */}
+      <Card className="border-primary/5 shadow-2xl shadow-primary/5 rounded-3xl overflow-hidden bg-white">
+        <div className="px-8 py-5 border-b border-primary/5 bg-primary/[0.02] flex items-center justify-between">
+          <h3 className="font-bold text-sm uppercase tracking-widest text-primary/60">
+            Daftar Pengiriman
+          </h3>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/30" />
+            <input
+              className="pl-9 pr-4 py-2 bg-white border border-primary/10 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 w-52"
+              placeholder="Cari resi atau kode..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+        </div>
 
-          <Card className="border-slate-100 shadow-sm rounded-xl overflow-hidden bg-white">
+        {isLoading ? (
+          <div className="py-24 flex flex-col items-center justify-center gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary/20" />
+            <p className="text-xs font-bold text-primary/40 uppercase tracking-widest">
+              Memuat Data...
+            </p>
+          </div>
+        ) : error ? (
+          <div className="py-24 flex flex-col items-center justify-center text-destructive text-center px-8">
+            <AlertCircle className="h-10 w-10 opacity-40 mb-4" />
+            <p className="font-bold">Gagal memuat data pengiriman</p>
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              className="mt-6 rounded-xl border-destructive/20 text-destructive hover:bg-destructive/5"
+            >
+              Coba Lagi
+            </Button>
+          </div>
+        ) : (
+          <>
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-slate-100">
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-slate-400">Kode Barang</TableHead>
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-slate-400">Tanggal Pengiriman</TableHead>
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-slate-400">Alamat Tujuan</TableHead>
-                  <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-slate-400">Status</TableHead>
+                <TableRow className="hover:bg-transparent border-primary/5">
+                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                    Resi & Item
+                  </TableHead>
+                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                    Kurir
+                  </TableHead>
+                  <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                    Status
+                  </TableHead>
+                  <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                    Aksi
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[
-                  {
-                    id: "TRK-2023-8901",
-                    date: "24 Oct 2023",
-                    address: "Jl. Sudirman Kav 52-53\nJakarta Selatan, 12190",
-                    status: "Dalam Perjalanan",
-                    statusColor: "text-blue-600 bg-blue-50 border-blue-200",
-                    active: true,
-                  },
-                  {
-                    id: "TRK-2023-8895",
-                    date: "23 Oct 2023",
-                    address: "Plaza Indonesia Lt. 3\nJakarta Pusat, 10350",
-                    status: "Terkirim",
-                    statusColor: "text-green-600 bg-green-50 border-green-200",
-                    active: false,
-                  },
-                  {
-                    id: "TRK-2023-8872",
-                    date: "22 Oct 2023",
-                    address: "Jl. Merdeka No. 45\nBandung, 40111",
-                    status: "Belum Dikirim",
-                    statusColor: "text-slate-600 bg-slate-100 border-slate-200",
-                    active: false,
-                  },
-                  {
-                    id: "TRK-2023-8850",
-                    date: "20 Oct 2023",
-                    address: "Pakuwon Mall GF\nSurabaya, 60213",
-                    status: "Tertunda",
-                    statusColor: "text-red-600 bg-red-50 border-red-200",
-                    active: false,
-                  },
-                ].map((item) => (
-                  <TableRow key={item.id} className={`border-slate-50 cursor-pointer ${item.active ? 'bg-slate-50/80 hover:bg-slate-50/80' : 'hover:bg-slate-50/50'}`}>
-                    <TableCell className="font-mono text-xs font-bold text-slate-700 align-top py-4">
-                      {item.id.split('-').map((part, i) => <div key={i}>{part}{i < 2 ? '-' : ''}</div>)}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-600 align-top py-4">
-                      {item.date.split(' ').map((part, i) => <div key={i}>{part}</div>)}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-600 whitespace-pre-line py-4">
-                      {item.address}
-                    </TableCell>
-                    <TableCell className="text-right align-top py-4">
-                      <span className={`inline-flex items-center justify-center text-[10px] font-bold tracking-widest uppercase px-2 py-1 rounded-full border ${item.statusColor}`}>
-                        {item.status === 'Dalam Perjalanan' && <span className="mr-1 h-1.5 w-1.5 rounded-full bg-blue-600"></span>}
-                        {item.status === 'Terkirim' && <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-600"></span>}
-                        {item.status === 'Tertunda' && <span className="mr-1 h-1.5 w-1.5 rounded-full bg-red-600"></span>}
-                        {item.status}
-                      </span>
+                {paginated.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="h-32 text-center text-muted-foreground font-medium italic"
+                    >
+                      {search
+                        ? "Tidak ada hasil pencarian."
+                        : "Belum ada data pengiriman."}
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  paginated.map((item) => {
+                    const resi = item.resi_number;
+                    const cached = resi
+                      ? queryClient.getQueryData<TrackingResponse>([
+                          "tracking",
+                          resi,
+                        ])
+                      : undefined;
+                    // Gunakan parseLiveStatus pada last_status dari DB agar status tetap benar setelah refresh
+                    const displayStatus = cached
+                      ? parseLiveStatus(cached.status, cached.history)
+                      : parseLiveStatus(item.last_status);
+                    const key = item.item_code || item.id;
+                    return (
+                      <TableRow
+                        key={String(key)}
+                        className="border-primary/5 hover:bg-primary/[0.02] transition-all"
+                      >
+                        <TableCell className="py-5 px-8">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                RESI
+                              </span>
+                              <span className="font-mono text-sm font-bold text-foreground">
+                                {resi || "—"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                KODE
+                              </span>
+                              <span className="text-sm font-semibold text-slate-600">
+                                {item.item_code || "N/A"}
+                              </span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-5">
+                          <div className="flex items-center gap-2">
+                            <Truck className="h-3.5 w-3.5 text-primary/40" />
+                            <span className="text-sm font-semibold uppercase text-slate-600">
+                              {item.courier || "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center px-4 py-5">
+                          <StatusBadge status={displayStatus} />
+                        </TableCell>
+                        <TableCell className="text-right px-8 py-5">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openDetail(item)}
+                              className="rounded-xl border-primary/10 text-primary hover:bg-primary/5 font-bold text-xs h-8 px-3"
+                            >
+                              <MapPin className="h-3 w-3 mr-1" /> Detail
+                            </Button>
+                            <button
+                              onClick={(e) =>
+                                openDeleteConfirm(
+                                  e,
+                                  String(item.item_code || item.id),
+                                )
+                              }
+                              className="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
-            
-            <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500 bg-white">
-              <div>Showing 1-4 of 124 entries</div>
-              <Pagination className="justify-end w-auto mx-0">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious href="#" className="text-slate-400 border-none" />
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink href="#" isActive className="bg-black text-white hover:bg-black hover:text-white rounded-md">
-                      1
-                    </PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink href="#" className="text-slate-600 border-none">2</PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink href="#" className="text-slate-600 border-none">3</PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationNext href="#" className="text-slate-600 border-none" />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          </Card>
-        </div>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="px-8 py-4 border-t border-primary/5 flex items-center justify-between bg-primary/[0.01]">
+                <Pagination>
+                  <PaginationContent className="w-full flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground font-medium hidden md:block">
+                      Menampilkan {(page - 1) * PAGE_SIZE + 1}–
+                      {Math.min(page * PAGE_SIZE, filtered.length)} dari{" "}
+                      {filtered.length} pengiriman
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === 1 ? "pointer-events-none opacity-40" : ""}`}
+                        />
+                      </PaginationItem>
 
-        {/* Right Column: Tracking Details */}
-        <div className="lg:col-span-1">
-          <Card className="border-slate-100 shadow-sm rounded-xl bg-white p-6 sticky top-6">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-xs font-bold tracking-widest text-slate-400 uppercase">Tracking Details</h3>
-                <p className="font-mono text-sm font-bold text-slate-900 mt-1">TRK-2023-8901</p>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                        (p) => {
+                          if (
+                            totalPages > 5 &&
+                            p !== 1 &&
+                            p !== totalPages &&
+                            Math.abs(p - page) > 1
+                          ) {
+                            if (p === 2 || p === totalPages - 1) {
+                              return (
+                                <PaginationItem key={p}>
+                                  <PaginationEllipsis className="text-primary/40" />
+                                </PaginationItem>
+                              );
+                            }
+                            return null;
+                          }
+
+                          return (
+                            <PaginationItem key={p}>
+                              <PaginationLink
+                                onClick={() => setPage(p)}
+                                isActive={p === page}
+                                className={`rounded-xl cursor-pointer text-xs font-bold transition-all ${p === page ? "bg-primary text-white hover:bg-primary/90 hover:text-white shadow-md shadow-primary/20" : "hover:bg-primary/5 hover:text-primary text-muted-foreground"}`}
+                              >
+                                {p}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        },
+                      )}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() =>
+                            setPage((p) => Math.min(totalPages, p + 1))
+                          }
+                          className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === totalPages ? "pointer-events-none opacity-40" : ""}`}
+                        />
+                      </PaginationItem>
+                    </div>
+                  </PaginationContent>
+                </Pagination>
               </div>
-              <Button variant="ghost" size="icon" className="text-slate-400 h-8 w-8">
-                <Printer className="h-4 w-4" />
+            )}
+          </>
+        )}
+      </Card>
+
+      {/* Detail Modal */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="rounded-[2rem] border-none shadow-2xl max-w-lg p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-primary/5 to-primary/10 px-8 py-6 border-b border-primary/10">
+            <p className="text-[10px] font-bold tracking-[0.2em] text-primary/50 uppercase mb-1">
+              Detail Pelacakan
+            </p>
+            <p className="font-mono text-lg font-black text-foreground tracking-tighter">
+              {detailItem?.resi_number || "—"}
+            </p>
+            <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-1.5">
+                <Truck className="h-3.5 w-3.5 text-primary/50" />
+                <span className="text-xs font-bold uppercase text-slate-600">
+                  {detailItem?.courier || "—"}
+                </span>
+              </div>
+              <StatusBadge status={liveStatus} />
+            </div>
+          </div>
+          <div className="px-8 py-6">
+            <h4 className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/60 uppercase mb-5 flex items-center gap-2">
+              Riwayat Perjalanan <div className="h-px flex-1 bg-muted/30" />
+            </h4>
+            {detailResi && <TrackingTimeline resi={detailResi} />}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden max-w-[400px]">
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="h-8 w-8 text-rose-500" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
+              Hapus Pengiriman?
+            </h2>
+            <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+              Tindakan ini tidak dapat dibatalkan. Data{" "}
+              <span className="font-bold text-slate-900">{itemToDelete}</span>{" "}
+              akan dihapus permanen.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="ghost"
+                className="flex-1 rounded-2xl h-12 font-bold"
+                onClick={() => setIsDeleteOpen(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl h-12 font-bold shadow-lg shadow-rose-200"
+                onClick={handleDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  "Ya, Hapus"
+                )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            {/* Map Placeholder */}
-            <div className="bg-slate-100 rounded-lg aspect-[4/3] mb-6 flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
-              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300"><path d="m14.14 14.14 5.66-5.66M8.46 8.46 2.8 2.8M14.14 8.46l5.66 5.66M8.46 14.14l-5.66 5.66M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+      {/* Success Toast */}
+      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+        <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden max-w-[320px]">
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-bounce">
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
             </div>
-
-            <div className="space-y-4 mb-8">
-              <div className="flex gap-3">
-                <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold tracking-widest text-slate-400 uppercase">Destination</h4>
-                  <p className="text-sm font-medium text-slate-900 mt-1">Jl. Sudirman Kav 52-53,<br/>Jakarta Selatan, 12190</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Truck className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold tracking-widest text-slate-400 uppercase">Carrier</h4>
-                  <p className="text-sm font-medium text-slate-900 mt-1">Vogue Express Logistics</p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-bold tracking-widest text-slate-400 uppercase mb-4">Tracking Timeline</h4>
-              <div className="relative pl-4 pt-2 space-y-6 before:absolute before:inset-y-2 before:left-[3px] before:w-px before:bg-slate-200">
-                {[
-                  { title: "Paket sedang dalam perjalanan ke hub Jakarta Pusat", time: "24 Oct 2023, 14:30 WIB", active: true },
-                  { title: "Paket telah berangkat dari Gudang Utama", time: "24 Oct 2023, 08:15 WIB" },
-                  { title: "Paket telah diproses dan siap dikirim", time: "23 Oct 2023, 16:45 WIB" },
-                  { title: "Pesanan dibuat", time: "23 Oct 2023, 10:20 WIB" },
-                  { title: "Pembayaran telah dikonfirmasi", time: "23 Oct 2023, 10:05 WIB" },
-                  { title: "Menunggu pembayaran", time: "23 Oct 2023, 09:50 WIB" },
-                ].map((event, i) => (
-                  <div key={i} className="relative">
-                    <span className={`absolute -left-[21px] top-1.5 h-2 w-2 rounded-full ring-4 ring-white ${event.active ? 'bg-black' : 'bg-slate-300'}`}></span>
-                    <p className={`text-sm ${event.active ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>
-                      {event.title}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">{event.time}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-1">Berhasil!</h2>
+            <p className="text-sm text-slate-500">
+              Data telah dihapus dari sistem.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
