@@ -363,9 +363,16 @@ export default function PengirimanPage() {
                 resi: decodedText,
                 ...(detectedCourier ? { courier: detectedCourier } : {}),
               }));
-              setIsScanning(false);
+              
               if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(console.error);
+                html5QrcodeScanner.clear().then(() => {
+                  setIsScanning(false);
+                }).catch((err: any) => {
+                  console.error("Clear error:", err);
+                  setIsScanning(false);
+                });
+              } else {
+                setIsScanning(false);
               }
             },
             (error: any) => {
@@ -624,7 +631,7 @@ export default function PengirimanPage() {
         </div>
 
         <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
-          <DialogContent className="rounded-3xl border-none shadow-2xl">
+          <DialogContent className="rounded-3xl border-none shadow-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">
                 Daftarkan Resi Baru
