@@ -18,7 +18,7 @@ function DialogTrigger({
   return (
     <DialogPrimitive.Trigger 
       data-slot="dialog-trigger" 
-      render={asChild ? children : render} 
+      render={(asChild ? children : render) as any} 
       {...props}
     >
       {!asChild && children}
