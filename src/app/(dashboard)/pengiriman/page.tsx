@@ -352,7 +352,11 @@ export default function PengirimanPage() {
         try {
           html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
             "reader",
-            { fps: 10, qrbox: { width: 250, height: 100 } },
+            { 
+              fps: 10, 
+              qrbox: { width: 250, height: 100 },
+              useBarCodeDetectorIfSupported: true
+            },
             false,
           );
           html5QrcodeScanner.render(
