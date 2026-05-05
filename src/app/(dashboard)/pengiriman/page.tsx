@@ -288,6 +288,7 @@ export default function PengirimanPage() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // ── React Query: daftar pengiriman ────────────────────────────────────────
   const {
@@ -336,13 +337,13 @@ export default function PengirimanPage() {
 
   // ── Scanner Effect ────────────────────────────────────────────────────────
   useEffect(() => {
-    let html5QrcodeScanner: any = null;
+    let html5QrCode: any = null;
     let timer: NodeJS.Timeout;
 
     if (
       !isScanning ||
       typeof window === "undefined" ||
-      !(window as any).Html5QrcodeScanner
+      !(window as any).Html5Qrcode
     )
       return;
 
@@ -350,16 +351,14 @@ export default function PengirimanPage() {
       const readerElement = document.getElementById("reader");
       if (readerElement) {
         try {
-          html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
-            "reader",
+          html5QrCode = new (window as any).Html5Qrcode("reader");
+          html5QrCode.start(
+            { facingMode: "environment" },
             { 
-              fps: 10, 
-              qrbox: { width: 250, height: 100 },
+              fps: 15, 
+              qrbox: { width: 300, height: 150 },
               useBarCodeDetectorIfSupported: true
             },
-            false,
-          );
-          html5QrcodeScanner.render(
             (decodedText: string) => {
               const detectedCourier = detectCourier(decodedText);
               setRegisterData((prev) => ({
@@ -368,11 +367,12 @@ export default function PengirimanPage() {
                 ...(detectedCourier ? { courier: detectedCourier } : {}),
               }));
               
-              if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().then(() => {
+              if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                  html5QrCode.clear();
                   setIsScanning(false);
                 }).catch((err: any) => {
-                  console.error("Clear error:", err);
+                  console.error("Stop error:", err);
                   setIsScanning(false);
                 });
               } else {
@@ -381,8 +381,17 @@ export default function PengirimanPage() {
             },
             (error: any) => {
               // ignore scan errors
-            },
-          );
+            }
+          ).catch((err: any) => {
+             console.error("Camera start error:", err);
+             let msg = "Gagal mengakses kamera perangkat Anda.";
+             if (err?.name === "NotReadableError" || err?.message?.includes("NotReadableError")) {
+               msg = "Kamera sedang digunakan oleh aplikasi lain (Zoom, OBS, dll) atau terblokir secara hardware. Harap tutup aplikasi lain.";
+             } else if (err?.name === "NotAllowedError" || err?.message?.includes("NotAllowedError")) {
+               msg = "Akses kamera ditolak oleh browser. Silakan izinkan kamera melalui ikon gembok di URL bar.";
+             }
+             setCameraError(msg);
+          });
         } catch (err) {
           console.error("Scanner init error:", err);
         }
@@ -396,9 +405,9 @@ export default function PengirimanPage() {
 
     return () => {
       clearTimeout(timer);
-      if (html5QrcodeScanner) {
+      if (html5QrCode) {
         try {
-          html5QrcodeScanner.clear().catch(console.error);
+          html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
         } catch (e) {}
       }
     };
@@ -627,6 +636,7 @@ export default function PengirimanPage() {
             onClick={() => {
               setIsRegisterOpen(true);
               setIsScanning(true);
+              setCameraError(null);
             }}
             className="bg-primary text-primary-foreground hover:opacity-90 rounded-xl shadow-lg shadow-primary/20 font-bold"
           >
@@ -647,10 +657,18 @@ export default function PengirimanPage() {
                   <p className="text-xs font-bold text-primary/60 uppercase tracking-widest mb-3">
                     Arahkan Kamera ke Barcode Resi
                   </p>
-                  <div
-                    id="reader"
-                    className="w-full [&>div]:border-none [&_video]:rounded-xl [&_img]:mx-auto [&_button]:mx-auto [&_span]:text-center"
-                  ></div>
+                  
+                  {cameraError ? (
+                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-3 w-full animate-in fade-in">
+                       <AlertTriangle className="h-6 w-6 text-rose-500 mx-auto mb-2" />
+                       <p className="text-xs font-bold text-rose-600 leading-relaxed">{cameraError}</p>
+                    </div>
+                  ) : (
+                    <div
+                      id="reader"
+                      className="w-full [&>div]:border-none [&_video]:rounded-xl [&_img]:mx-auto [&_button]:mx-auto [&_span]:text-center min-h-[150px]"
+                    ></div>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
