@@ -336,6 +336,7 @@ export default function PengirimanPage() {
   const {
     data: shipments = [],
     isLoading,
+    isFetching,
     error,
     refetch,
   } = useQuery<Shipment[]>({
@@ -813,14 +814,25 @@ export default function PengirimanPage() {
           <h3 className="font-bold text-sm uppercase tracking-widest text-primary/60">
             Daftar Pengiriman
           </h3>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/30" />
-            <input
-              className="pl-9 pr-4 py-2 bg-white border border-primary/10 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 w-52"
-              placeholder="Cari resi atau kode..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/30" />
+              <input
+                className="pl-9 pr-4 py-2 bg-white border border-primary/10 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 w-32 sm:w-52"
+                placeholder="Cari resi atau kode..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              variant="outline"
+              size="icon"
+              className="h-[34px] w-[34px] rounded-full border-primary/10 text-primary hover:bg-primary/5 shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin opacity-50' : ''}`} />
+            </Button>
           </div>
         </div>
 
