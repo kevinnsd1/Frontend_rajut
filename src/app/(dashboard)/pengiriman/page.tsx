@@ -139,9 +139,16 @@ function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
     latestText.includes("arrived") ||
     latestText.includes("departed") ||
     latestText.includes("process") ||
-    latestText.includes("transit")
+    latestText.includes("transit") ||
+    latestText.includes("dikirim ke") ||
+    latestText.includes("tiba di") ||
+    latestText.includes("diproses")
   )
     return "DIPROSES";
+
+  if (history && history.length > 0 && (!raw || raw.toLowerCase() === "pending")) {
+    return "DIPROSES";
+  }
 
   if (!raw) return "PENDING";
   const lower = raw.toLowerCase();
@@ -289,11 +296,16 @@ function TrackingTimeline({ resi, initialHistory }: { resi: string, initialHisto
 
   return (
     <div className="relative pl-6 space-y-7 before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-primary/10 max-h-[60vh] overflow-y-auto pr-2">
-      {isFetching && data?.history && data.history.length > 0 && (
-        <div className="absolute top-2 right-2 flex items-center gap-2 bg-primary/5 text-primary text-[10px] px-2 py-1 rounded-full font-bold">
-          <Loader2 className="h-3 w-3 animate-spin" /> Updating...
-        </div>
-      )}
+      <div className="absolute top-0 right-2 z-10 bg-white/80 backdrop-blur-sm rounded-full">
+        <button
+          onClick={handleManualRefresh}
+          disabled={isFetching}
+          className="flex items-center gap-1.5 bg-primary/5 hover:bg-primary/10 text-primary text-[10px] px-2.5 py-1 rounded-full font-bold transition-all disabled:opacity-50 border border-primary/10"
+        >
+          <RefreshCw className={`h-3 w-3 ${isFetching ? 'animate-spin' : ''}`} /> 
+          {isFetching ? "Memuat..." : "Refresh"}
+        </button>
+      </div>
       {(data?.history ?? []).map((event, i) => (
         <div key={i} className="relative">
           <span
