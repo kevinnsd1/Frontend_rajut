@@ -135,6 +135,17 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Logout button */}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all text-rose-400 hover:text-rose-600"
+        >
+          <div className="p-1.5 rounded-full">
+            <LogOut className="h-5 w-5" />
+          </div>
+          <span className="text-[10px] font-bold tracking-tight">Keluar</span>
+        </button>
       </div>
     </>
   );
