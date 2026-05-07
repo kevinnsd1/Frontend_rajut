@@ -153,7 +153,7 @@ export default function PembatalanPaketPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
             <input
               className="pl-11 pr-4 py-2.5 bg-white border-none shadow-sm rounded-2xl text-xs font-bold focus:ring-2 focus:ring-primary/20 w-full text-slate-600 placeholder:text-slate-300"
-              placeholder="Cari kode, resi, atau alasan..."
+              placeholder="Cari resi atau alasan..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
@@ -185,8 +185,7 @@ export default function PembatalanPaketPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-slate-50">
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Kode Barang</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Nomor Resi</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Nomor Resi</TableHead>
                       <TableHead className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Status</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Alasan</TableHead>
                       <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Aksi</TableHead>
@@ -206,25 +205,17 @@ export default function PembatalanPaketPage() {
                       paginated.map((item, i) => (
                         <TableRow key={item.id || i} className="border-slate-50 hover:bg-slate-50/50 transition-all group">
                           <TableCell className="py-6 px-8">
-                             <div className="flex flex-col">
-                              <span className="font-black text-sm text-slate-900 group-hover:text-rose-500 transition-colors">
-                                {item.item_code || "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                {item.cancelled_at ? new Date(item.cancelled_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                              </span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="px-4 py-6">
                              <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase">
                                   {item.courier || "N/A"}
                                 </span>
                               </div>
-                              <span className="font-mono text-xs font-bold text-slate-600">
+                              <span className="font-mono text-sm font-bold text-slate-900 group-hover:text-rose-500 transition-colors">
                                 {item.resi_number || "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                {item.cancelled_at ? new Date(item.cancelled_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                               </span>
                             </div>
                           </TableCell>
@@ -288,7 +279,7 @@ export default function PembatalanPaketPage() {
                   <div key={item.id || i} className="p-6 space-y-4 bg-white hover:bg-slate-50/50 active:bg-slate-100/50 transition-all">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <p className="font-black text-slate-900 leading-none">{item.item_code}</p>
+                        <p className="font-black text-slate-900 leading-none">{item.resi_number}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                           {item.cancelled_at ? new Date(item.cancelled_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                         </p>
@@ -304,7 +295,7 @@ export default function PembatalanPaketPage() {
                       </div>
                       <div className="overflow-hidden">
                         <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">{item.courier || "Kurir N/A"}</p>
-                        <p className="font-mono text-[11px] font-bold text-slate-600 truncate">{item.resi_number || "—"}</p>
+                        <p className="font-mono text-[11px] font-bold text-slate-600 truncate">{item.cancelled_at ? new Date(item.cancelled_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }) : "—"}</p>
                       </div>
                     </div>
 
@@ -446,7 +437,7 @@ export default function PembatalanPaketPage() {
               Hapus Data Batal?
             </h2>
             <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-              Catatan pembatalan untuk item <span className="font-bold text-slate-900">{itemToDelete}</span> akan dihapus permanen.
+              Catatan pembatalan untuk resi <span className="font-bold text-slate-900">{itemToDelete}</span> akan dihapus permanen.
             </p>
             <div className="flex gap-3">
               <Button

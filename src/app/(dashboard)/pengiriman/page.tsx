@@ -111,7 +111,6 @@ interface TrackingResponse {
 }
 
 interface RegisterForm {
-  item_code: string;
   resi: string;
   courier: string;
 }
@@ -125,7 +124,7 @@ const COURIERS = [
   { value: "ninja", label: "Ninja Xpress" },
 ];
 
-const DEFAULT_FORM: RegisterForm = { item_code: "", resi: "", courier: "jne" };
+const DEFAULT_FORM: RegisterForm = { resi: "", courier: "jne" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -287,8 +286,8 @@ export default function PengirimanPage() {
           "Paket dikembalikan";
         try {
           await apiService.saveReturn({
-            sku_code: item.item_code || resi,
-            product_name: item.item_code || resi,
+            sku_code: resi,
+            product_name: resi,
             reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
             status: "PENDING",
           });
@@ -407,7 +406,7 @@ export default function PengirimanPage() {
       try {
         const trackingData = await apiService.trackDirect(
           resi,
-          item.item_code || undefined,
+          undefined,
         );
         queryClient.setQueryData(["tracking", resi], trackingData);
 
@@ -423,8 +422,8 @@ export default function PengirimanPage() {
             "Paket dikembalikan";
           try {
             await apiService.saveReturn({
-              sku_code: item.item_code || resi,
-              product_name: item.item_code || resi,
+              sku_code: resi,
+              product_name: resi,
               reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
               status: "PENDING",
             });
@@ -446,8 +445,8 @@ export default function PengirimanPage() {
           "Paket dikembalikan";
         try {
           await apiService.saveReturn({
-            sku_code: item.item_code || resi,
-            product_name: item.item_code || resi,
+            sku_code: resi,
+            product_name: resi,
             reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
             status: "PENDING",
           });
@@ -465,7 +464,6 @@ export default function PengirimanPage() {
 
     // Simpan data sementara untuk dipakai di modal detail
     const resiToTrack = registerData.resi;
-    const itemCode = registerData.item_code;
     const courierUsed = registerData.courier;
 
     try {
@@ -478,7 +476,7 @@ export default function PengirimanPage() {
 
       // 3. LANGSUNG BUKA MODAL DETAIL (Sekaligus pasang data placeholder)
       const placeholderItem: Shipment = {
-        item_code: itemCode,
+        item_code: resiToTrack,
         resi_number: resiToTrack,
         courier: courierUsed,
         last_status: "PENDING",
@@ -494,7 +492,7 @@ export default function PengirimanPage() {
       try {
         const trackingData = await apiService.trackDirect(
           resiToTrack,
-          itemCode || undefined,
+          undefined,
         );
 
         // Update cache — ini akan otomatis mengupdate modal detail yang sedang terbuka
@@ -513,8 +511,8 @@ export default function PengirimanPage() {
             trackingData.history?.[0]?.description || "Paket Diretur";
           try {
             await apiService.saveReturn({
-              sku_code: itemCode || resiToTrack,
-              product_name: itemCode || resiToTrack,
+              sku_code: resiToTrack,
+              product_name: resiToTrack,
               reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
               status: "PENDING",
             });
@@ -556,8 +554,8 @@ export default function PengirimanPage() {
 
   const filtered = shipments.filter(
     (s) =>
-      (s.item_code || "").toLowerCase().includes(search.toLowerCase()) ||
-      (s.resi_number || "").toLowerCase().includes(search.toLowerCase()),
+      (s.resi_number || "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.courier || "").toLowerCase().includes(search.toLowerCase()),
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -653,28 +651,11 @@ export default function PengirimanPage() {
               <form onSubmit={handleRegister} className="space-y-5">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    Kode Barang
-                  </Label>
-                  <Input
-                    required
-                    autoFocus
-                    placeholder="Contoh: QL-JKT-001"
-                    className="rounded-xl border-primary/10"
-                    value={registerData.item_code}
-                    onChange={(e) =>
-                      setRegisterData({
-                        ...registerData,
-                        item_code: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Nomor Resi
                   </Label>
                   <Input
                     required
+                    autoFocus
                     placeholder="Contoh: JNE123456789"
                     className="rounded-xl border-primary/10"
                     value={registerData.resi}
@@ -741,7 +722,7 @@ export default function PengirimanPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/30" />
               <input
                 className="pl-9 pr-4 py-2 bg-white border border-primary/10 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 w-32 sm:w-52"
-                placeholder="Cari resi atau kode..."
+                placeholder="Cari resi atau kurir..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -786,7 +767,7 @@ export default function PengirimanPage() {
                   <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
                     <TableRow className="hover:bg-transparent border-primary/5">
                   <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
-                    Resi & Item
+                    Nomor Resi
                   </TableHead>
                   <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
                     Kurir
@@ -827,30 +808,20 @@ export default function PengirimanPage() {
                     const displayStatus = cached
                       ? parseLiveStatus(cached.status, cached.history)
                       : parseLiveStatus(item.last_status);
-                    const key = item.item_code || item.id;
+                    const key = item.resi_number || item.id;
                     return (
                       <TableRow
                         key={String(key)}
                         className="border-primary/5 hover:bg-primary/[0.02] transition-all"
                       >
                         <TableCell className="py-5 px-8">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded-md uppercase tracking-wider">
-                                RESI
-                              </span>
-                              <span className="font-mono text-sm font-bold text-foreground">
-                                {resi || "—"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
-                                KODE
-                              </span>
-                              <span className="text-sm font-semibold text-slate-600">
-                                {item.item_code || "N/A"}
-                              </span>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                              RESI
+                            </span>
+                            <span className="font-mono text-sm font-bold text-foreground">
+                              {resi || "—"}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="px-4 py-5">
@@ -898,7 +869,7 @@ export default function PengirimanPage() {
                               onClick={(e) =>
                                 openDeleteConfirm(
                                   e,
-                                  String(item.item_code || item.id),
+                                  String(item.resi_number || item.id),
                                 )
                               }
                               className="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
@@ -1021,7 +992,6 @@ export default function PengirimanPage() {
               Hapus Pengiriman?
             </h2>
             <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-              Tindakan ini tidak dapat dibatalkan. Data{" "}
               <span className="font-bold text-slate-900">{itemToDelete}</span>{" "}
               akan dihapus permanen.
             </p>

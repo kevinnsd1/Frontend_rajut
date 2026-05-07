@@ -40,7 +40,7 @@ export const apiService = {
     return data;
   },
 
-  registerResi: async (params: { item_code: string; resi: string; courier: string; destination?: string }) => {
+  registerResi: async (params: { resi: string; courier: string; item_code?: string; destination?: string }) => {
     const response = await fetch(`${API_BASE_URL}/register`, {
       method: "POST",
       headers: getHeaders(),
@@ -103,7 +103,7 @@ export const apiService = {
     return response.json();
   },
 
-  saveReturn: async (payload: { sku_code: string; product_name: string; reason: string; status: string }) => {
+  saveReturn: async (payload: { sku_code?: string; product_name: string; reason: string; status: string }) => {
     const response = await fetch(`${API_BASE_URL}/returns`, {
       method: "POST",
       headers: getHeaders(),
@@ -163,7 +163,7 @@ export const apiService = {
   },
 
   saveCancellation: async (payload: {
-    item_code: string;
+    item_code?: string;
     resi_number?: string;
     courier?: string;
     reason?: string;

@@ -144,8 +144,7 @@ export default function ReturBarangPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-slate-50">
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Informasi Paket</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Kurir & Resi</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Kurir & Resi</TableHead>
                       <TableHead className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Status</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 py-6">Alasan Retur</TableHead>
                       <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400 px-8 py-6">Aksi</TableHead>
@@ -165,24 +164,17 @@ export default function ReturBarangPage() {
                       paginated.map((item, i) => (
                         <TableRow key={item.id || i} className="border-slate-50 hover:bg-slate-50/50 transition-all group">
                           <TableCell className="py-6 px-8">
-                            <div className="flex flex-col">
-                              <span className="font-black text-sm text-slate-900 group-hover:text-primary transition-colors">
-                                {item.sku_code || "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-4 py-6">
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase">
                                   {item.courier || "N/A"}
                                 </span>
                               </div>
-                              <span className="font-mono text-xs font-bold text-slate-600">
+                              <span className="font-mono text-sm font-bold text-slate-900 group-hover:text-primary transition-colors">
                                 {item.resi_number || "Belum ada resi"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                               </span>
                             </div>
                           </TableCell>
@@ -221,7 +213,7 @@ export default function ReturBarangPage() {
                                  variant="ghost"
                                  className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50"
                                  onClick={() => {
-                                   setItemToDelete(item.sku_code || null);
+                                   setItemToDelete(item.resi_number || null);
                                    setIsDeleteOpen(true);
                                  }}
                                >
@@ -249,7 +241,7 @@ export default function ReturBarangPage() {
                   <div key={item.id || i} className="p-6 space-y-4 bg-white hover:bg-slate-50/50 active:bg-slate-100/50 transition-all">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <p className="font-black text-slate-900 leading-none">{item.sku_code}</p>
+                        <p className="font-black text-slate-900 leading-none">{item.resi_number}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                           {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                         </p>
@@ -271,7 +263,7 @@ export default function ReturBarangPage() {
                       </div>
                       <div className="overflow-hidden">
                         <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">{item.courier || "Kurir N/A"}</p>
-                        <p className="font-mono text-[11px] font-bold text-slate-600 truncate">{item.resi_number || "—"}</p>
+                        <p className="font-mono text-[11px] font-bold text-slate-600 truncate">{item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }) : "—"}</p>
                       </div>
                     </div>
 
@@ -413,7 +405,7 @@ export default function ReturBarangPage() {
               Hapus Data Retur?
             </h2>
             <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-              Catatan retur untuk item <span className="font-bold text-slate-900">{itemToDelete}</span> akan dihapus permanen.
+              Catatan retur untuk resi <span className="font-bold text-slate-900">{itemToDelete}</span> akan dihapus permanen.
             </p>
             <div className="flex gap-3">
               <Button
