@@ -11,23 +11,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Download, Plus, Search, SlidersHorizontal, MoreHorizontal, Loader2, AlertCircle } from "lucide-react";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination";
 import { apiService } from "@/services/api";
+
+const PAGE_SIZE = 10;
 
 export default function DataBarangPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetchProducts();
@@ -58,6 +52,15 @@ export default function DataBarangPage() {
     }
   };
 
+  const filtered = products.filter(
+    (p) =>
+      (p.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.sku_code || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.category || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex justify-between items-start">
@@ -83,10 +86,12 @@ export default function DataBarangPage() {
             <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-primary/40">
               <Search className="h-4 w-4" />
             </span>
-            <input 
-              type="text" 
-              placeholder="Cari berdasarkan nama atau kode..." 
+            <input
+              type="text"
+              placeholder="Cari berdasarkan nama, kode, atau kategori..."
               className="w-full pl-11 pr-4 py-2.5 bg-primary/5 border border-primary/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           <Button variant="outline" className="text-primary border-primary/10 rounded-xl hover:bg-primary/5 h-10 px-5">
@@ -111,6 +116,7 @@ export default function DataBarangPage() {
             </Button>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-primary/5">
@@ -122,16 +128,16 @@ export default function DataBarangPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.length === 0 ? (
+              {paginated.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-medium">
-                    Belum ada data barang tersedia.
+                    {search ? "Tidak ada produk yang cocok." : "Belum ada data barang tersedia."}
                   </TableCell>
                 </TableRow>
               ) : (
-                products.map((item) => (
+                paginated.map((item) => (
                   <TableRow key={item.sku_code} className="border-primary/5 hover:bg-primary/[0.02] transition-colors group">
-                    <TableCell className="font-mono text-xs text-muted-foreground font-bold">{item.sku_code}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground font-bold px-8">{item.sku_code}</TableCell>
                     <TableCell>
                       <div className="font-bold text-foreground text-sm">{item.name}</div>
                       <div className="text-xs text-muted-foreground">{item.category}</div>
@@ -142,7 +148,7 @@ export default function DataBarangPage() {
                         {item.status || (item.stock > 10 ? 'Available' : item.stock > 0 ? 'Low Stock' : 'Out of Stock')}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right px-8">
                       <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-xl">
                         <MoreHorizontal className="h-5 w-5" />
                       </Button>
@@ -152,26 +158,55 @@ export default function DataBarangPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          <div className="px-8 py-4 border-t border-primary/5 flex items-center justify-between bg-primary/[0.01]">
+            <span className="text-xs text-muted-foreground font-medium">
+              {filtered.length === 0
+                ? "Tidak ada data"
+                : `Menampilkan ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} dari ${filtered.length} produk`}
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  ← Prev
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let p: number;
+                  if (totalPages <= 7) p = i + 1;
+                  else if (page <= 4) p = i + 1;
+                  else if (page >= totalPages - 3) p = totalPages - 6 + i;
+                  else p = page - 3 + i;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`h-8 w-8 text-xs font-bold rounded-xl transition-all ${
+                        p === page
+                          ? "bg-primary text-white shadow-md shadow-primary/20"
+                          : "border border-primary/10 text-primary hover:bg-primary/5"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </div>
+          </>
         )}
-        
-        <div className="p-6 border-t border-primary/5 flex items-center justify-between text-sm text-muted-foreground bg-primary/[0.02]">
-          <div className="font-medium">Menampilkan {products.length} entitas</div>
-          <Pagination className="justify-end w-auto mx-0">
-            <PaginationContent className="gap-2">
-              <PaginationItem>
-                <PaginationPrevious href="#" className="hover:bg-primary/10 rounded-xl transition-colors h-10 px-4" />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationLink href="#" isActive className="bg-primary text-primary-foreground hover:opacity-90 rounded-xl h-10 w-10 border-none shadow-lg shadow-primary/20">
-                  1
-                </PaginationLink>
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationNext href="#" className="hover:bg-primary/10 rounded-xl transition-colors h-10 px-4 text-primary font-bold" />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
       </Card>
     </div>
   );
