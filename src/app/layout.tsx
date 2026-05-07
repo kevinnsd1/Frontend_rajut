@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "QueenyLook - Cozy Modern Fashion",
   description: "Dashboard manajemen stok dan pengiriman untuk QueenyLook",
+  manifest: "/manifest.json",
+  themeColor: "#ec4899",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 export default function RootLayout({
