@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   FileText,
   LogOut,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,7 +24,9 @@ const navigation = [
   { name: "Dashboard Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Pengiriman (Cek Resi)", href: "/pengiriman", icon: Truck },
   { name: "Retur Barang", href: "/retur-barang", icon: RotateCcw },
+  { name: "Pembatalan Paket", href: "/pembatalan-paket", icon: Ban },
 ];
+
 
 export function Sidebar() {
   const pathname = usePathname();

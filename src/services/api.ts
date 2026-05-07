@@ -141,5 +141,40 @@ export const apiService = {
     });
     if (!response.ok) throw new Error("Failed to complete stock opname");
     return response.json();
-  }
+  },
+
+  // F. Pembatalan Paket
+  getCancellations: async () => {
+    const response = await fetch(`${API_BASE_URL}/cancellations`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Failed to fetch cancellations");
+    return response.json();
+  },
+
+  saveCancellation: async (payload: {
+    item_code: string;
+    resi_number?: string;
+    courier?: string;
+    reason?: string;
+  }) => {
+    const response = await fetch(`${API_BASE_URL}/cancellations`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Gagal mencatat pembatalan");
+    return data;
+  },
+
+  deleteCancellation: async (item_code: string) => {
+    const response = await fetch(`${API_BASE_URL}/cancellations/${item_code}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Gagal menghapus catatan pembatalan");
+    return response.json();
+  },
 };
+
