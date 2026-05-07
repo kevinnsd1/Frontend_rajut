@@ -89,65 +89,66 @@ export default function ReturBarangPage() {
               Coba Lagi
             </Button>
           </div>
-        ) : returns.length === 0 ? (
-          <div className="py-24 text-center">
-            <PackageX className="h-12 w-12 text-slate-200 mx-auto mb-4" />
-            <p className="font-bold text-slate-400">Belum ada retur terdeteksi</p>
-            <p className="text-xs text-slate-400 mt-1">
-              Sistem akan otomatis mencatat retur saat paket terdeteksi dikembalikan.
-            </p>
-          </div>
         ) : (
           <>
-            {/* Scrollable Table */}
-            <div className="overflow-x-auto">
-              <div className="max-h-[420px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
-                    <TableRow className="hover:bg-transparent border-primary/5">
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">Kode Barang</TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Nama Produk</TableHead>
-                      <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Status</TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Alasan / Catatan</TableHead>
-                      <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">Tanggal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginated.map((item, i) => (
-                      <TableRow key={item.id || i} className="border-primary/5 hover:bg-primary/[0.02] transition-all">
-                        <TableCell className="py-5 px-8">
-                          <span className="font-mono text-sm font-bold text-primary">{item.sku_code || "—"}</span>
-                        </TableCell>
-                        <TableCell className="px-4 py-5">
-                          <span className="text-sm font-semibold text-foreground">{item.product_name || item.sku_code || "—"}</span>
-                        </TableCell>
-                        <TableCell className="text-center px-4 py-5">
-                          <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm ${
-                            item.status?.toUpperCase() === "PENDING"
-                              ? "bg-rose-50 text-rose-600 border-rose-100"
-                              : item.status?.toUpperCase() === "RESOLVED"
-                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              : "bg-primary/5 text-primary/60 border-primary/10"
-                          }`}>
-                            {item.status?.toUpperCase() === "PENDING"  && <AlertCircle className="w-3 h-3" />}
-                            {item.status?.toUpperCase() === "RESOLVED" && <CheckCircle2 className="w-3 h-3" />}
-                            {item.status || "PENDING"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-4 py-5 max-w-xs">
-                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{item.reason || "—"}</p>
-                        </TableCell>
-                        <TableCell className="text-right px-8 py-5">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+            {returns.length === 0 ? (
+              <div className="py-24 text-center">
+                <PackageX className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                <p className="font-bold text-slate-400">Belum ada retur terdeteksi</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Sistem akan otomatis mencatat retur saat paket terdeteksi dikembalikan.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="max-h-[420px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-primary/5">
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">Kode Barang</TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Nama Produk</TableHead>
+                        <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Status</TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">Alasan / Catatan</TableHead>
+                        <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">Tanggal</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginated.map((item, i) => (
+                        <TableRow key={item.id || i} className="border-primary/5 hover:bg-primary/[0.02] transition-all">
+                          <TableCell className="py-5 px-8">
+                            <span className="font-mono text-sm font-bold text-primary">{item.sku_code || "—"}</span>
+                          </TableCell>
+                          <TableCell className="px-4 py-5">
+                            <span className="text-sm font-semibold text-foreground">{item.product_name || item.sku_code || "—"}</span>
+                          </TableCell>
+                          <TableCell className="text-center px-4 py-5">
+                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm ${
+                              item.status?.toUpperCase() === "PENDING"
+                                ? "bg-rose-50 text-rose-600 border-rose-100"
+                                : item.status?.toUpperCase() === "RESOLVED"
+                                ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                : "bg-primary/5 text-primary/60 border-primary/10"
+                            }`}>
+                              {item.status?.toUpperCase() === "PENDING"  && <AlertCircle className="w-3 h-3" />}
+                              {item.status?.toUpperCase() === "RESOLVED" && <CheckCircle2 className="w-3 h-3" />}
+                              {item.status || "PENDING"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-5 max-w-xs">
+                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{item.reason || "—"}</p>
+                          </TableCell>
+                          <TableCell className="text-right px-8 py-5">
+                            <span className="text-xs text-muted-foreground font-medium">
+                              {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
 
             {/* Pagination Footer */}
             <div className="px-6 py-4 border-t border-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/[0.01]">

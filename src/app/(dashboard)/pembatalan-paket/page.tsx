@@ -146,86 +146,87 @@ export default function PembatalanPaketPage() {
               Coba Lagi
             </Button>
           </div>
-        ) : cancellations.length === 0 ? (
-          <div className="py-24 text-center">
-            <PackageX className="h-12 w-12 text-slate-200 mx-auto mb-4" />
-            <p className="font-bold text-slate-400">Belum ada pembatalan terdeteksi</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
-              Sistem akan otomatis mencatat pembatalan saat paket terdeteksi dibatalkan dari kurir.
-            </p>
-          </div>
         ) : (
           <>
-            {/* Scrollable Table */}
-            <div className="overflow-x-auto">
-              <div className="max-h-[420px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
-                    <TableRow className="hover:bg-transparent border-primary/5">
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
-                        Kode Barang
-                      </TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                        Nomor Resi
-                      </TableHead>
-                      <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                        Status
-                      </TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                        Alasan / Catatan
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
-                        Tanggal
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginated.map((item, i) => (
-                      <TableRow
-                        key={item.id || i}
-                        className="border-primary/5 hover:bg-primary/[0.02] transition-all"
-                      >
-                        <TableCell className="py-5 px-8">
-                          <span className="font-mono text-sm font-bold text-primary">
-                            {item.item_code || "—"}
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="px-4 py-5">
-                          <span className="text-sm font-semibold text-foreground">
-                            {item.resi_number || "—"}
-                          </span>
-                          {item.courier && (
-                            <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium uppercase tracking-wide">
-                              {COURIER_LABEL[item.courier.toLowerCase()] || item.courier.toUpperCase()}
-                            </p>
-                          )}
-                        </TableCell>
-
-                        <TableCell className="text-center px-4 py-5">
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm bg-rose-50 text-rose-600 border-rose-100">
-                            <Ban className="w-3 h-3" />
-                            BATAL
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="px-4 py-5 max-w-xs">
-                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                            {item.reason || "—"}
-                          </p>
-                        </TableCell>
-
-                        <TableCell className="text-right px-8 py-5">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {formatDate(item.cancelled_at)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+            {filtered.length === 0 ? (
+              <div className="py-24 text-center">
+                <PackageX className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                <p className="font-bold text-slate-400">Belum ada pembatalan terdeteksi</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                  Sistem akan otomatis mencatat pembatalan saat paket terdeteksi dibatalkan dari kurir.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="max-h-[420px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-primary/5">
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                          Kode Barang
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                          Nomor Resi
+                        </TableHead>
+                        <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                          Alasan / Catatan
+                        </TableHead>
+                        <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                          Tanggal
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginated.map((item, i) => (
+                        <TableRow
+                          key={item.id || i}
+                          className="border-primary/5 hover:bg-primary/[0.02] transition-all"
+                        >
+                          <TableCell className="py-5 px-8">
+                            <span className="font-mono text-sm font-bold text-primary">
+                              {item.item_code || "—"}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="px-4 py-5">
+                            <span className="text-sm font-semibold text-foreground">
+                              {item.resi_number || "—"}
+                            </span>
+                            {item.courier && (
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium uppercase tracking-wide">
+                                {COURIER_LABEL[item.courier.toLowerCase()] || item.courier.toUpperCase()}
+                              </p>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-5">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm bg-rose-50 text-rose-600 border-rose-100">
+                              <Ban className="w-3 h-3" />
+                              BATAL
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="px-4 py-5 max-w-xs">
+                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                              {item.reason || "—"}
+                            </p>
+                          </TableCell>
+
+                          <TableCell className="text-right px-8 py-5">
+                            <span className="text-xs text-muted-foreground font-medium">
+                              {formatDate(item.cancelled_at)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
 
             {/* Pagination Footer */}
             <div className="px-6 py-4 border-t border-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/[0.01]">
