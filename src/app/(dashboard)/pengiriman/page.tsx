@@ -67,6 +67,7 @@ interface Shipment {
   is_delivered?: boolean | number;
   created_at?: string;
   last_updated?: string;   // tanggal update terakhir dari worker
+  history?: TrackingEvent[];
 }
 
 interface TrackingEvent {
@@ -224,26 +225,27 @@ function StatusBadge({ status }: { status?: string }) {
   );
 }
 
-function TrackingTimeline({ resi }: { resi: string }) {
+function TrackingTimeline({ resi, initialHistory }: { resi: string, initialHistory?: TrackingEvent[] }) {
   const queryClient = useQueryClient();
   const [retryCount, setRetryCount] = useState(0);
 
   const { data, isLoading, isFetching } = useQuery<TrackingResponse>({
     queryKey: ["tracking", resi, retryCount],
     queryFn: () => apiService.trackDirect(resi),
-    staleTime: 0,
-    refetchOnMount: true,
+    initialData: initialHistory && initialHistory.length > 0 ? { history: initialHistory, status: parseLiveStatus("", initialHistory), success: true } : undefined,
+    staleTime: 1000 * 60, // 1 menit, background refetch setelah itu
+    refetchOnMount: true, // Akan refetch di background tiap modal dibuka (jika stale)
   });
 
   const isEmpty = !data?.history || data.history.length === 0;
 
-  // Auto-retry up to 3 times with 2s delay when result is empty
+  // Auto-retry up to 3 times with 2s delay when result is empty, tapi hanya jika tidak ada initial history
   useEffect(() => {
-    if (!isLoading && !isFetching && isEmpty && retryCount < 3) {
+    if (!isLoading && !isFetching && isEmpty && retryCount < 3 && (!initialHistory || initialHistory.length === 0)) {
       const t = setTimeout(() => setRetryCount((c) => c + 1), 2000);
       return () => clearTimeout(t);
     }
-  }, [isLoading, isFetching, isEmpty, retryCount]);
+  }, [isLoading, isFetching, isEmpty, retryCount, initialHistory]);
 
   const handleManualRefresh = () => {
     setRetryCount(0);
@@ -251,7 +253,8 @@ function TrackingTimeline({ resi }: { resi: string }) {
     setTimeout(() => setRetryCount(1), 50);
   };
 
-  if (isLoading || isFetching) {
+  // Jangan tampilkan loader penuh jika sudah ada data lama
+  if (isLoading && isEmpty) {
     return (
       <div className="py-12 flex flex-col items-center gap-3">
         <Loader2 className="h-7 w-7 animate-spin text-primary/30" />
@@ -262,7 +265,7 @@ function TrackingTimeline({ resi }: { resi: string }) {
     );
   }
 
-  if (isEmpty) {
+  if (isEmpty && !isFetching) {
     return (
       <div className="py-10 text-center flex flex-col items-center gap-3">
         <Package className="h-8 w-8 text-slate-200 mx-auto" />
@@ -284,6 +287,11 @@ function TrackingTimeline({ resi }: { resi: string }) {
 
   return (
     <div className="relative pl-6 space-y-7 before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-primary/10 max-h-[60vh] overflow-y-auto pr-2">
+      {isFetching && data?.history && data.history.length > 0 && (
+        <div className="absolute top-2 right-2 flex items-center gap-2 bg-primary/5 text-primary text-[10px] px-2 py-1 rounded-full font-bold">
+          <Loader2 className="h-3 w-3 animate-spin" /> Updating...
+        </div>
+      )}
       {(data?.history ?? []).map((event, i) => (
         <div key={i} className="relative">
           <span
@@ -1063,7 +1071,7 @@ export default function PengirimanPage() {
             <h4 className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/60 uppercase mb-5 flex items-center gap-2">
               Riwayat Perjalanan <div className="h-px flex-1 bg-muted/30" />
             </h4>
-            {detailResi && <TrackingTimeline resi={detailResi} />}
+            {detailResi && <TrackingTimeline resi={detailResi} initialHistory={detailItem?.history} />}
           </div>
         </DialogContent>
       </Dialog>
