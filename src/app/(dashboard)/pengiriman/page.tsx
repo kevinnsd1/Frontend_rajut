@@ -61,10 +61,12 @@ import {
 interface Shipment {
   id?: string | number;
   item_code?: string;
-  resi_number?: string; // nama field asli di database
+  resi_number?: string;
   courier?: string;
-  last_status?: string; // nama field status di database
+  last_status?: string;
   is_delivered?: boolean | number;
+  created_at?: string;
+  last_updated?: string;   // tanggal update terakhir dari worker
 }
 
 interface TrackingEvent {
@@ -850,6 +852,9 @@ export default function PengirimanPage() {
                   <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
                     Status
                   </TableHead>
+                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                    Tanggal
+                  </TableHead>
                   <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
                     Aksi
                   </TableHead>
@@ -859,7 +864,7 @@ export default function PengirimanPage() {
                 {paginated.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="h-32 text-center text-muted-foreground font-medium italic"
                     >
                       {search
@@ -916,6 +921,26 @@ export default function PengirimanPage() {
                         </TableCell>
                         <TableCell className="text-center px-4 py-5">
                           <StatusBadge status={displayStatus} />
+                        </TableCell>
+                        {/* Tanggal daftar & update */}
+                        <TableCell className="px-4 py-5">
+                          <div className="flex flex-col gap-1">
+                            {item.created_at && (
+                              <div className="text-[10px] text-muted-foreground/60 font-medium">
+                                <span className="font-bold text-primary/50">Daftar:</span>{" "}
+                                {new Date(item.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                              </div>
+                            )}
+                            {item.last_updated && (
+                              <div className="text-[10px] text-muted-foreground/60 font-medium">
+                                <span className="font-bold text-primary/50">Update:</span>{" "}
+                                {new Date(item.last_updated).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                              </div>
+                            )}
+                            {!item.created_at && !item.last_updated && (
+                              <span className="text-[10px] text-muted-foreground/40 italic">—</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right px-8 py-5">
                           <div className="flex items-center justify-end gap-2">
