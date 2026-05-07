@@ -11,10 +11,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Download, Plus, Search, SlidersHorizontal, MoreHorizontal, Loader2, AlertCircle } from "lucide-react";
 import { apiService } from "@/services/api";
-
-const PAGE_SIZE = 10;
 
 export default function DataBarangPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -22,6 +36,7 @@ export default function DataBarangPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchProducts();
@@ -58,19 +73,19 @@ export default function DataBarangPage() {
       (p.sku_code || "").toLowerCase().includes(search.toLowerCase()) ||
       (p.category || "").toLowerCase().includes(search.toLowerCase())
   );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Data Barang</h1>
           <p className="text-sm text-slate-500 mt-1">
             Kelola dan pantau katalog inventaris pakaian Anda.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full md:w-auto [&>button]:flex-1 md:[&>button]:flex-none">
           <Button variant="outline" className="text-primary bg-white border-primary/20 rounded-xl hover:bg-primary/5">
             <Download className="mr-2 h-4 w-4" /> Export
           </Button>
@@ -117,94 +132,94 @@ export default function DataBarangPage() {
           </div>
         ) : (
           <>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-primary/5">
-                <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">SKU Code</TableHead>
-                <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Product Name</TableHead>
-                <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Stok</TableHead>
-                <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Status</TableHead>
-                <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginated.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-medium">
-                    {search ? "Tidak ada produk yang cocok." : "Belum ada data barang tersedia."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginated.map((item) => (
-                  <TableRow key={item.sku_code} className="border-primary/5 hover:bg-primary/[0.02] transition-colors group">
-                    <TableCell className="font-mono text-xs text-muted-foreground font-bold px-8">{item.sku_code}</TableCell>
-                    <TableCell>
-                      <div className="font-bold text-foreground text-sm">{item.name}</div>
-                      <div className="text-xs text-muted-foreground">{item.category}</div>
-                    </TableCell>
-                    <TableCell className="text-sm text-foreground font-medium">{item.stock}</TableCell>
-                    <TableCell>
-                      <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm ${getStatusStyle(item.status || (item.stock > 10 ? 'AVAILABLE' : item.stock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK'))}`}>
-                        {item.status || (item.stock > 10 ? 'Available' : item.stock > 0 ? 'Low Stock' : 'Out of Stock')}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right px-8">
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-xl">
-                        <MoreHorizontal className="h-5 w-5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Pagination */}
-          <div className="px-8 py-4 border-t border-primary/5 flex items-center justify-between bg-primary/[0.01]">
-            <span className="text-xs text-muted-foreground font-medium">
-              {filtered.length === 0
-                ? "Tidak ada data"
-                : `Menampilkan ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} dari ${filtered.length} produk`}
-            </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  ← Prev
-                </button>
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let p: number;
-                  if (totalPages <= 7) p = i + 1;
-                  else if (page <= 4) p = i + 1;
-                  else if (page >= totalPages - 3) p = totalPages - 6 + i;
-                  else p = page - 3 + i;
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      className={`h-8 w-8 text-xs font-bold rounded-xl transition-all ${
-                        p === page
-                          ? "bg-primary text-white shadow-md shadow-primary/20"
-                          : "border border-primary/10 text-primary hover:bg-primary/5"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  Next →
-                </button>
+            {/* Scrollable Table */}
+            <div className="overflow-x-auto">
+              <div className="max-h-[420px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                    <TableRow className="hover:bg-transparent border-primary/5">
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">SKU Code</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Product Name</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Stok</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Status</TableHead>
+                      <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginated.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-medium">
+                          {search ? "Tidak ada produk yang cocok." : "Belum ada data barang tersedia."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginated.map((item) => (
+                        <TableRow key={item.sku_code} className="border-primary/5 hover:bg-primary/[0.02] transition-colors group">
+                          <TableCell className="font-mono text-xs text-muted-foreground font-bold px-8">{item.sku_code}</TableCell>
+                          <TableCell>
+                            <div className="font-bold text-foreground text-sm">{item.name}</div>
+                            <div className="text-xs text-muted-foreground">{item.category}</div>
+                          </TableCell>
+                          <TableCell className="text-sm text-foreground font-medium">{item.stock}</TableCell>
+                          <TableCell>
+                            <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm ${getStatusStyle(item.status || (item.stock > 10 ? 'AVAILABLE' : item.stock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK'))}`}>
+                              {item.status || (item.stock > 10 ? 'Available' : item.stock > 0 ? 'Low Stock' : 'Out of Stock')}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right px-8">
+                            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-xl">
+                              <MoreHorizontal className="h-5 w-5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </div>
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="px-6 py-4 border-t border-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/[0.01]">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium">Tampilkan</span>
+                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-8 w-20 rounded-xl border-primary/10 text-xs font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {[5, 10, 20].map((s) => (
+                      <SelectItem key={s} value={String(s)} className="text-xs font-bold">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="font-medium">item — Total <strong>{filtered.length}</strong></span>
+              </div>
+
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent className="flex items-center gap-1">
+                    <PaginationItem>
+                      <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === 1 ? "pointer-events-none opacity-40" : ""}`} />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                      if (totalPages > 5 && p !== 1 && p !== totalPages && Math.abs(p - page) > 1) {
+                        if (p === 2 || p === totalPages - 1) return <PaginationItem key={p}><PaginationEllipsis className="text-primary/40" /></PaginationItem>;
+                        return null;
+                      }
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink onClick={() => setPage(p)} isActive={p === page} className={`rounded-xl cursor-pointer text-xs font-bold transition-all ${p === page ? "bg-primary text-white hover:bg-primary/90 hover:text-white shadow-md shadow-primary/20" : "hover:bg-primary/5 hover:text-primary text-muted-foreground"}`}>{p}</PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    <PaginationItem>
+                      <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === totalPages ? "pointer-events-none opacity-40" : ""}`} />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
           </>
         )}
       </Card>

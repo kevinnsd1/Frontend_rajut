@@ -12,6 +12,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AlertCircle, Loader2, Ban, PackageX, Search } from "lucide-react";
 import { apiService } from "@/services/api";
 
@@ -25,8 +41,6 @@ interface CancelledItem {
   reason?: string;
   cancelled_at?: string;
 }
-
-const PAGE_SIZE = 10;
 
 const COURIER_LABEL: Record<string, string> = {
   jne: "JNE Express",
@@ -50,6 +64,7 @@ function formatDate(dateStr?: string) {
 
 export default function PembatalanPaketPage() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
 
   const {
@@ -70,8 +85,8 @@ export default function PembatalanPaketPage() {
       (c.resi_number || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.reason || "").toLowerCase().includes(search.toLowerCase())
   );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const totalCount = cancellations.length;
 
@@ -79,7 +94,7 @@ export default function PembatalanPaketPage() {
     <div className="max-w-6xl mx-auto space-y-8">
 
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pembatalan Paket</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -141,114 +156,118 @@ export default function PembatalanPaketPage() {
           </div>
         ) : (
           <>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-primary/5">
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
-                    Kode Barang
-                  </TableHead>
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                    Nomor Resi
-                  </TableHead>
-                  <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
-                    Alasan / Catatan
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
-                    Tanggal
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map((item, i) => (
-                  <TableRow
-                    key={item.id || i}
-                    className="border-primary/5 hover:bg-primary/[0.02] transition-all"
-                  >
-                    {/* Kode Barang */}
-                    <TableCell className="py-5 px-8">
-                      <span className="font-mono text-sm font-bold text-primary">
-                        {item.item_code || "—"}
-                      </span>
-                    </TableCell>
+            {/* Scrollable Table */}
+            <div className="overflow-x-auto">
+              <div className="max-h-[420px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                    <TableRow className="hover:bg-transparent border-primary/5">
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                        Kode Barang
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                        Nomor Resi
+                      </TableHead>
+                      <TableHead className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-4 py-5">
+                        Alasan / Catatan
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
+                        Tanggal
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginated.map((item, i) => (
+                      <TableRow
+                        key={item.id || i}
+                        className="border-primary/5 hover:bg-primary/[0.02] transition-all"
+                      >
+                        <TableCell className="py-5 px-8">
+                          <span className="font-mono text-sm font-bold text-primary">
+                            {item.item_code || "—"}
+                          </span>
+                        </TableCell>
 
-                    {/* Nomor Resi + Kurir */}
-                    <TableCell className="px-4 py-5">
-                      <span className="text-sm font-semibold text-foreground">
-                        {item.resi_number || "—"}
-                      </span>
-                      {item.courier && (
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium uppercase tracking-wide">
-                          {COURIER_LABEL[item.courier.toLowerCase()] || item.courier.toUpperCase()}
-                        </p>
-                      )}
-                    </TableCell>
+                        <TableCell className="px-4 py-5">
+                          <span className="text-sm font-semibold text-foreground">
+                            {item.resi_number || "—"}
+                          </span>
+                          {item.courier && (
+                            <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium uppercase tracking-wide">
+                              {COURIER_LABEL[item.courier.toLowerCase()] || item.courier.toUpperCase()}
+                            </p>
+                          )}
+                        </TableCell>
 
-                    {/* Status Badge */}
-                    <TableCell className="text-center px-4 py-5">
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm bg-rose-50 text-rose-600 border-rose-100">
-                        <Ban className="w-3 h-3" />
-                        BATAL
-                      </span>
-                    </TableCell>
+                        <TableCell className="text-center px-4 py-5">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border shadow-sm bg-rose-50 text-rose-600 border-rose-100">
+                            <Ban className="w-3 h-3" />
+                            BATAL
+                          </span>
+                        </TableCell>
 
-                    {/* Alasan */}
-                    <TableCell className="px-4 py-5 max-w-xs">
-                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                        {item.reason || "—"}
-                      </p>
-                    </TableCell>
+                        <TableCell className="px-4 py-5 max-w-xs">
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                            {item.reason || "—"}
+                          </p>
+                        </TableCell>
 
-                    {/* Tanggal */}
-                    <TableCell className="text-right px-8 py-5">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {formatDate(item.cancelled_at)}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-8 py-4 border-t border-primary/5 flex items-center justify-between bg-primary/[0.01]">
-                <span className="text-xs text-muted-foreground font-medium">
-                  Menampilkan {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} dari {filtered.length} pembatalan
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    ← Prev
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      className={`h-8 w-8 text-xs font-bold rounded-xl transition-all ${
-                        p === page
-                          ? "bg-primary text-white shadow-md shadow-primary/20"
-                          : "border border-primary/10 text-primary hover:bg-primary/5"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="h-8 px-3 text-xs font-bold rounded-xl border border-primary/10 text-primary hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next →
-                  </button>
-                </div>
+                        <TableCell className="text-right px-8 py-5">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {formatDate(item.cancelled_at)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            )}
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="px-6 py-4 border-t border-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/[0.01]">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium">Tampilkan</span>
+                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-8 w-20 rounded-xl border-primary/10 text-xs font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {[5, 10, 20].map((s) => (
+                      <SelectItem key={s} value={String(s)} className="text-xs font-bold">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="font-medium">item — Total <strong>{filtered.length}</strong></span>
+              </div>
+
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent className="flex items-center gap-1">
+                    <PaginationItem>
+                      <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === 1 ? "pointer-events-none opacity-40" : ""}`} />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                      if (totalPages > 5 && p !== 1 && p !== totalPages && Math.abs(p - page) > 1) {
+                        if (p === 2 || p === totalPages - 1) return <PaginationItem key={p}><PaginationEllipsis className="text-primary/40" /></PaginationItem>;
+                        return null;
+                      }
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink onClick={() => setPage(p)} isActive={p === page} className={`rounded-xl cursor-pointer text-xs font-bold transition-all ${p === page ? "bg-primary text-white hover:bg-primary/90 hover:text-white shadow-md shadow-primary/20" : "hover:bg-primary/5 hover:text-primary text-muted-foreground"}`}>{p}</PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    <PaginationItem>
+                      <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === totalPages ? "pointer-events-none opacity-40" : ""}`} />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
           </>
         )}
       </Card>

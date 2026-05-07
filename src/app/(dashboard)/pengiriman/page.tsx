@@ -26,6 +26,7 @@ import {
   Package,
   ScanLine,
   X,
+  RefreshCw,
 } from "lucide-react";
 import {
   Dialog,
@@ -222,32 +223,63 @@ function StatusBadge({ status }: { status?: string }) {
 }
 
 function TrackingTimeline({ resi }: { resi: string }) {
-  const { data, isLoading } = useQuery<TrackingResponse>({
-    queryKey: ["tracking", resi],
+  const queryClient = useQueryClient();
+  const [retryCount, setRetryCount] = useState(0);
+
+  const { data, isLoading, isFetching } = useQuery<TrackingResponse>({
+    queryKey: ["tracking", resi, retryCount],
     queryFn: () => apiService.trackDirect(resi),
-    staleTime: 1000 * 60 * 5, // cache 5 menit, tidak refetch jika sudah ada
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
-  if (isLoading) {
+  const isEmpty = !data?.history || data.history.length === 0;
+
+  // Auto-retry up to 3 times with 2s delay when result is empty
+  useEffect(() => {
+    if (!isLoading && !isFetching && isEmpty && retryCount < 3) {
+      const t = setTimeout(() => setRetryCount((c) => c + 1), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [isLoading, isFetching, isEmpty, retryCount]);
+
+  const handleManualRefresh = () => {
+    setRetryCount(0);
+    queryClient.removeQueries({ queryKey: ["tracking", resi] });
+    setTimeout(() => setRetryCount(1), 50);
+  };
+
+  if (isLoading || isFetching) {
     return (
       <div className="py-12 flex flex-col items-center gap-3">
         <Loader2 className="h-7 w-7 animate-spin text-primary/30" />
         <p className="text-[10px] font-bold text-primary/40 uppercase tracking-widest">
-          Melacak Paket...
+          {retryCount > 0 ? `Mencoba ulang... (${retryCount}/3)` : "Melacak Paket..."}
         </p>
       </div>
     );
   }
-  if (!data?.history || data.history.length === 0) {
+
+  if (isEmpty) {
     return (
-      <div className="py-12 text-center">
-        <Package className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+      <div className="py-10 text-center flex flex-col items-center gap-3">
+        <Package className="h-8 w-8 text-slate-200 mx-auto" />
         <p className="text-xs text-muted-foreground italic">
-          Tidak ada riwayat perjalanan tersedia.
+          {retryCount >= 3
+            ? "Data tracking tidak tersedia saat ini."
+            : "Mencari data perjalanan..."}
         </p>
+        <button
+          onClick={handleManualRefresh}
+          className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-all bg-primary/5 hover:bg-primary/10 px-4 py-2 rounded-xl"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh Tracking
+        </button>
       </div>
     );
   }
+
   return (
     <div className="relative pl-6 space-y-7 before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-primary/10 max-h-[60vh] overflow-y-auto pr-2">
       {data.history.map((event, i) => (
@@ -277,7 +309,7 @@ export default function PengirimanPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 10;
+  const [pageSize, setPageSize] = useState(10);
   const [detailItem, setDetailItem] = useState<Shipment | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -594,8 +626,8 @@ export default function PengirimanPage() {
       (s.item_code || "").toLowerCase().includes(search.toLowerCase()) ||
       (s.resi_number || "").toLowerCase().includes(search.toLowerCase()),
   );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const detailResi = detailItem?.resi_number;
 
@@ -803,9 +835,12 @@ export default function PengirimanPage() {
           </div>
         ) : (
           <>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-primary/5">
+            {/* Scrollable Table */}
+            <div className="overflow-x-auto">
+              <div className="max-h-[420px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                    <TableRow className="hover:bg-transparent border-primary/5">
                   <TableHead className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-8 py-5">
                     Resi & Item
                   </TableHead>
@@ -909,71 +944,72 @@ export default function PengirimanPage() {
                     );
                   })
                 )}
-              </TableBody>
-            </Table>
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="px-8 py-4 border-t border-primary/5 flex items-center justify-between bg-primary/[0.01]">
+                </TableBody>
+              </Table>
+            </div>
+            </div>
+            {/* Pagination Footer */}
+            <div className="px-6 py-4 border-t border-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/[0.01]">
+              {/* Page size selector */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium">Tampilkan</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+                >
+                  <SelectTrigger className="h-8 w-20 rounded-xl border-primary/10 text-xs font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {[5, 10, 20].map((s) => (
+                      <SelectItem key={s} value={String(s)} className="text-xs font-bold">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="font-medium">item — Total <strong>{filtered.length}</strong></span>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
                 <Pagination>
-                  <PaginationContent className="w-full flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground font-medium hidden md:block">
-                      Menampilkan {(page - 1) * PAGE_SIZE + 1}–
-                      {Math.min(page * PAGE_SIZE, filtered.length)} dari{" "}
-                      {filtered.length} pengiriman
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === 1 ? "pointer-events-none opacity-40" : ""}`}
-                        />
-                      </PaginationItem>
+                  <PaginationContent className="flex items-center gap-1">
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === 1 ? "pointer-events-none opacity-40" : ""}`}
+                      />
+                    </PaginationItem>
 
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                        (p) => {
-                          if (
-                            totalPages > 5 &&
-                            p !== 1 &&
-                            p !== totalPages &&
-                            Math.abs(p - page) > 1
-                          ) {
-                            if (p === 2 || p === totalPages - 1) {
-                              return (
-                                <PaginationItem key={p}>
-                                  <PaginationEllipsis className="text-primary/40" />
-                                </PaginationItem>
-                              );
-                            }
-                            return null;
-                          }
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                      if (totalPages > 5 && p !== 1 && p !== totalPages && Math.abs(p - page) > 1) {
+                        if (p === 2 || p === totalPages - 1) {
+                          return <PaginationItem key={p}><PaginationEllipsis className="text-primary/40" /></PaginationItem>;
+                        }
+                        return null;
+                      }
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            onClick={() => setPage(p)}
+                            isActive={p === page}
+                            className={`rounded-xl cursor-pointer text-xs font-bold transition-all ${p === page ? "bg-primary text-white hover:bg-primary/90 hover:text-white shadow-md shadow-primary/20" : "hover:bg-primary/5 hover:text-primary text-muted-foreground"}`}
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
 
-                          return (
-                            <PaginationItem key={p}>
-                              <PaginationLink
-                                onClick={() => setPage(p)}
-                                isActive={p === page}
-                                className={`rounded-xl cursor-pointer text-xs font-bold transition-all ${p === page ? "bg-primary text-white hover:bg-primary/90 hover:text-white shadow-md shadow-primary/20" : "hover:bg-primary/5 hover:text-primary text-muted-foreground"}`}
-                              >
-                                {p}
-                              </PaginationLink>
-                            </PaginationItem>
-                          );
-                        },
-                      )}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() =>
-                            setPage((p) => Math.min(totalPages, p + 1))
-                          }
-                          className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === totalPages ? "pointer-events-none opacity-40" : ""}`}
-                        />
-                      </PaginationItem>
-                    </div>
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className={`rounded-xl cursor-pointer font-bold text-xs hover:bg-primary/5 hover:text-primary transition-all ${page === totalPages ? "pointer-events-none opacity-40" : ""}`}
+                      />
+                    </PaginationItem>
                   </PaginationContent>
                 </Pagination>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </Card>
