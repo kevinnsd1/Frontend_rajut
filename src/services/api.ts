@@ -58,9 +58,10 @@ export const apiService = {
     return data;
   },
 
-  trackDirect: async (resi: string, item_code?: string) => {
+  trackDirect: async (resi: string, item_code?: string, courier?: string) => {
     const params = new URLSearchParams({ resi });
     if (item_code) params.append("item_code", item_code);
+    if (courier) params.append("courier", courier);
     const response = await fetch(`${API_BASE_URL}/track-direct?${params.toString()}`, {
       headers: getHeaders(),
     });
@@ -111,6 +112,15 @@ export const apiService = {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Failed to save return");
     return data;
+  },
+
+  deleteReturn: async (sku_code: string) => {
+    const response = await fetch(`${API_BASE_URL}/returns/${sku_code}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Gagal menghapus catatan retur");
+    return response.json();
   },
 
   // E. Stock Opname
