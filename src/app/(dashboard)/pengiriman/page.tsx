@@ -263,7 +263,7 @@ function TrackingTimeline({ resi, initialHistory }: { resi: string, initialHisto
   };
 
   // Jangan tampilkan loader penuh jika sudah ada data lama
-  if (isLoading && isEmpty) {
+  if (isFetching && isEmpty) {
     return (
       <div className="py-12 flex flex-col items-center gap-3">
         <Loader2 className="h-7 w-7 animate-spin text-primary/30" />
