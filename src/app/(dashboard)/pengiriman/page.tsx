@@ -229,8 +229,8 @@ function TrackingTimeline({ resi, initialHistory }: { resi: string, initialHisto
   const queryClient = useQueryClient();
   const [retryCount, setRetryCount] = useState(0);
 
-  const { data, isLoading, isFetching } = useQuery<TrackingResponse>({
-    queryKey: ["tracking", resi, retryCount],
+  const { data, isLoading, isFetching, refetch } = useQuery<TrackingResponse>({
+    queryKey: ["tracking", resi],
     queryFn: () => apiService.trackDirect(resi),
     initialData: initialHistory && initialHistory.length > 0 ? { history: initialHistory, status: parseLiveStatus("", initialHistory), success: true } : undefined,
     staleTime: 1000 * 60, // 1 menit, background refetch setelah itu
@@ -242,15 +242,17 @@ function TrackingTimeline({ resi, initialHistory }: { resi: string, initialHisto
   // Auto-retry up to 3 times with 2s delay when result is empty, tapi hanya jika tidak ada initial history
   useEffect(() => {
     if (!isLoading && !isFetching && isEmpty && retryCount < 3 && (!initialHistory || initialHistory.length === 0)) {
-      const t = setTimeout(() => setRetryCount((c) => c + 1), 2000);
+      const t = setTimeout(() => {
+        setRetryCount((c) => c + 1);
+        refetch();
+      }, 2000);
       return () => clearTimeout(t);
     }
-  }, [isLoading, isFetching, isEmpty, retryCount, initialHistory]);
+  }, [isLoading, isFetching, isEmpty, retryCount, initialHistory, refetch]);
 
   const handleManualRefresh = () => {
     setRetryCount(0);
-    queryClient.removeQueries({ queryKey: ["tracking", resi] });
-    setTimeout(() => setRetryCount(1), 50);
+    refetch();
   };
 
   // Jangan tampilkan loader penuh jika sudah ada data lama
