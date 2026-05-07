@@ -19,6 +19,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services/auth";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -31,8 +43,10 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<{ username: string } | null>(null);
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -46,8 +60,20 @@ export function Sidebar() {
   if (!mounted) return null;
 
   const handleLogout = () => {
+    // 1. Clear Auth Service (localStorage & cookies)
     authService.logout();
+    
+    // 2. Clear React Query Cache
+    queryClient.clear();
+    
+    // 3. Close Modal and Redirect
+    setIsLogoutOpen(false);
     router.push("/login");
+    
+    // 4. Force reload to ensure all states are reset
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
   };
 
   return (
@@ -87,8 +113,8 @@ export function Sidebar() {
 
         <div className="border-t pt-4 px-2">
           <button 
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground mb-4"
+            onClick={() => setIsLogoutOpen(true)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-500 transition-all hover:bg-rose-50 hover:translate-x-1 mb-4"
           >
             <LogOut className="h-4 w-4" />
             Sign Out
@@ -138,7 +164,7 @@ export function Sidebar() {
 
         {/* Logout button */}
         <button
-          onClick={handleLogout}
+          onClick={() => setIsLogoutOpen(true)}
           className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all text-rose-400 hover:text-rose-600"
         >
           <div className="p-1.5 rounded-full">
@@ -147,6 +173,33 @@ export function Sidebar() {
           <span className="text-[10px] font-bold tracking-tight">Keluar</span>
         </button>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <AlertDialog open={isLogoutOpen} onOpenChange={setIsLogoutOpen}>
+        <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden max-w-[400px]">
+          <div className="p-8 text-center">
+             <div className="w-16 h-16 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="h-8 w-8 text-rose-500" />
+             </div>
+             <AlertDialogTitle className="text-xl font-bold text-slate-900 mb-2">Konfirmasi Keluar</AlertDialogTitle>
+             <AlertDialogDescription className="text-sm text-slate-500 mb-8 leading-relaxed">
+                Apakah Anda yakin ingin keluar? Sesi Anda akan dihentikan dan cache data akan dibersihkan sepenuhnya demi keamanan.
+             </AlertDialogDescription>
+             
+             <div className="flex gap-3">
+                <AlertDialogCancel className="flex-1 rounded-2xl h-12 font-bold border-slate-100 text-slate-400 hover:bg-slate-50 m-0">
+                  Batal
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleLogout}
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl h-12 font-bold shadow-lg shadow-rose-200 m-0"
+                >
+                  Ya, Keluar
+                </AlertDialogAction>
+             </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
