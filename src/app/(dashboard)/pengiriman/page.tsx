@@ -282,7 +282,7 @@ function TrackingTimeline({ resi }: { resi: string }) {
 
   return (
     <div className="relative pl-6 space-y-7 before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-primary/10 max-h-[60vh] overflow-y-auto pr-2">
-      {data.history.map((event, i) => (
+      {(data?.history ?? []).map((event, i) => (
         <div key={i} className="relative">
           <span
             className={`absolute -left-[24px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white border-2 ${i === 0 ? "bg-primary border-primary shadow-lg shadow-primary/20" : "bg-white border-primary/20"}`}
