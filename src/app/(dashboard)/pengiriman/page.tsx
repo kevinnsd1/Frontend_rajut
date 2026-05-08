@@ -153,11 +153,22 @@ function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
     latestText.includes("retur")
   )
     return "RETURNED";
-  if (latestText.includes("delivered") || latestText.includes("diterima"))
+  if (
+    latestText.includes("delivered") ||
+    latestText.includes("diterima") ||
+    latestText.includes("sampai") ||
+    latestText.includes("selesai") ||
+    latestText.includes("success")
+  )
     return "DELIVERED";
   if (
     latestText.includes("will be delivered") ||
-    latestText.includes("out for delivery")
+    latestText.includes("out for delivery") ||
+    latestText.includes("diantarkan kurir") ||
+    latestText.includes("sedang diantar") ||
+    latestText.includes("sedang dikirim") ||
+    latestText.includes("on delivery") ||
+    latestText.includes("with courier")
   )
     return "DIKIRIM";
   if (
@@ -167,7 +178,9 @@ function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
     latestText.includes("transit") ||
     latestText.includes("dikirim ke") ||
     latestText.includes("tiba di") ||
-    latestText.includes("diproses")
+    latestText.includes("diproses") ||
+    latestText.includes("manifest") ||
+    latestText.includes("received at")
   )
     return "DIPROSES";
 
@@ -177,14 +190,24 @@ function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
 
   if (!raw) return "PENDING";
   const lower = raw.toLowerCase();
-  if (lower.includes("delivered") || lower.includes("diterima"))
+  if (
+    lower.includes("delivered") ||
+    lower.includes("diterima") ||
+    lower.includes("success")
+  )
     return "DELIVERED";
   if (lower.includes("return") || lower.includes("retur")) return "RETURNED";
-  if (lower.includes("on delivery")) return "DIKIRIM";
+  if (
+    lower.includes("on delivery") ||
+    lower.includes("diantar") ||
+    lower.includes("dikirim")
+  )
+    return "DIKIRIM";
   if (
     lower.includes("on process") ||
     lower.includes("transit") ||
-    lower.includes("process")
+    lower.includes("process") ||
+    lower.includes("diproses")
   )
     return "DIPROSES";
   return "PENDING";
