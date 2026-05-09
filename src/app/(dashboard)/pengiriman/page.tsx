@@ -27,6 +27,7 @@ import {
   ScanLine,
   X,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import {
   Dialog,
@@ -275,6 +276,8 @@ export default function PengirimanPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isBulkMode, setIsBulkMode] = useState(true);
+  const resiInputRef = useRef<HTMLInputElement>(null);
 
   // ── React Query: daftar pengiriman ────────────────────────────────────────
   const {
@@ -493,7 +496,28 @@ export default function PengirimanPage() {
       // 1. Simpan ke database (Sangat cepat sekarang karena background task)
       await apiService.registerResi(registerData);
 
-      // 2. Tutup modal pendaftaran & bersihkan form
+      // 2. Berikan feedback visual/haptic sederhana (opsional, bisa ditambah sound nanti)
+      
+      if (isBulkMode) {
+        // MODE SATSET: Jangan tutup modal, langsung siap scan berikutnya
+        setRegisterData(DEFAULT_FORM);
+        setRegisterLoading(false);
+        // Focus balik ke input setelah state update
+        setTimeout(() => resiInputRef.current?.focus(), 50);
+        
+        // Tracking & Invalidate tetap jalan di background (non-blocking)
+        queryClient.invalidateQueries({ queryKey: ["shipments"] });
+        
+        // Jalankan tracking live tanpa di-await (agar UI tidak macet)
+        apiService.trackDirect(resiToTrack).then(trackingData => {
+            queryClient.setQueryData(["tracking", resiToTrack], trackingData);
+            queryClient.invalidateQueries({ queryKey: ["shipments"] });
+        }).catch(e => console.warn("Background track failed:", e));
+        
+        return; // SELESAI UNTUK MODE BULK
+      }
+
+      // MODE STANDAR: Tutup modal & buka detail
       setIsRegisterOpen(false);
       setRegisterData(DEFAULT_FORM);
 
@@ -672,6 +696,26 @@ export default function PengirimanPage() {
               )}
 
               <form onSubmit={handleRegister} className="space-y-5">
+                <div className="flex items-center justify-between p-3 bg-primary/5 rounded-2xl border border-primary/10">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${isBulkMode ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      <Zap className="h-3.5 w-3.5 fill-current" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-tight leading-none mb-0.5">Mode Satset</p>
+                      <p className="text-[9px] text-muted-foreground font-medium">Scan beruntun tanpa henti</p>
+                    </div>
+                  </div>
+                  <div 
+                    onClick={() => setIsBulkMode(!isBulkMode)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${isBulkMode ? 'bg-primary' : 'bg-slate-200'}`}
+                  >
+                    <span
+                      className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${isBulkMode ? 'translate-x-5' : 'translate-x-0.5'}`}
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Nomor Resi
@@ -679,8 +723,9 @@ export default function PengirimanPage() {
                   <Input
                     required
                     autoFocus
-                    placeholder="Contoh: JNE123456789"
-                    className="rounded-xl border-primary/10"
+                    ref={resiInputRef}
+                    placeholder={isBulkMode ? "Siap scan paket..." : "Contoh: JNE123456789"}
+                    className={`rounded-xl border-primary/10 h-12 text-lg font-bold transition-all ${isBulkMode ? 'border-primary shadow-sm bg-primary/[0.02]' : ''}`}
                     value={registerData.resi}
                     onChange={(e) => {
                       const val = e.target.value;
