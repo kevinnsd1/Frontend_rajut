@@ -423,51 +423,19 @@ export default function PengirimanPage() {
     const resi = item.resi_number;
     if (!resi) return;
 
-    // Jika belum ada cache, fetch sekarang
-    const existing = queryClient.getQueryData<TrackingResponse>([
-      "tracking",
-      resi,
-    ]);
-    if (!existing) {
-      try {
-        const trackingData = await apiService.trackDirect(
-          resi,
-          undefined,
-        );
-        queryClient.setQueryData(["tracking", resi], trackingData);
+    // Selalu hapus cache lama → tampil loading state → fetch data segar
+    queryClient.removeQueries({ queryKey: ["tracking", resi] });
 
-        // Deteksi retur otomatis
-        const liveStatus = parseLiveStatus(
-          trackingData.status,
-          trackingData.history,
-        );
-        if (liveStatus === "RETURNED") {
-          const latestDesc =
-            trackingData.history?.[0]?.description ||
-            trackingData.history?.[0]?.status ||
-            "Paket dikembalikan";
-          try {
-            await apiService.saveReturn({
-              sku_code: resi,
-              product_name: resi,
-              reason: `Paket Diretur: ${translateDescription(latestDesc)}`,
-              status: "PENDING",
-            });
-            queryClient.invalidateQueries({ queryKey: ["returns"] });
-          } catch (_) {
-            /* abaikan duplikat */
-          }
-        }
-      } catch (err) {
-        console.warn("[Detail] track gagal:", err);
-      }
-    } else {
-      // Cache sudah ada — cek apakah perlu save retur
-      const liveStatus = parseLiveStatus(existing.status, existing.history);
+    try {
+      const trackingData = await apiService.trackDirect(resi, undefined);
+      queryClient.setQueryData(["tracking", resi], trackingData);
+
+      // Deteksi retur otomatis dari data segar
+      const liveStatus = parseLiveStatus(trackingData.status, trackingData.history);
       if (liveStatus === "RETURNED") {
         const latestDesc =
-          existing.history?.[0]?.description ||
-          existing.history?.[0]?.status ||
+          trackingData.history?.[0]?.description ||
+          trackingData.history?.[0]?.status ||
           "Paket dikembalikan";
         try {
           await apiService.saveReturn({
@@ -481,6 +449,11 @@ export default function PengirimanPage() {
           /* abaikan duplikat */
         }
       }
+
+      // Refresh tabel agar status ikut terupdate tanpa perlu refresh manual
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (err) {
+      console.warn("[Detail] track gagal:", err);
     }
   }
 
