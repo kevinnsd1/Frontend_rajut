@@ -845,10 +845,10 @@ export default function PengirimanPage() {
                           resi,
                         ])
                       : undefined;
-                    // Gunakan parseLiveStatus pada last_status dari DB agar status tetap benar setelah refresh
+                    // Gunakan history dari DB juga agar status tetap benar setelah refresh
                     const displayStatus = cached
                       ? parseLiveStatus(cached.status, cached.history)
-                      : parseLiveStatus(item.last_status);
+                      : parseLiveStatus(item.last_status, item.history);
                     const key = item.resi_number || item.id;
                     return (
                       <TableRow
