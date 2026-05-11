@@ -74,6 +74,7 @@ function StatusBadge({ status }: { status?: string }) {
     DIPROSES: "text-blue-600 bg-blue-50 border-blue-100",
     DIKIRIM: "text-violet-600 bg-violet-50 border-violet-100",
     RETURNED: "text-orange-600 bg-orange-50 border-orange-100",
+    RETURNED_SUCCESS: "text-emerald-600 bg-emerald-50 border-emerald-100",
     PENDING: "text-slate-500 bg-slate-50 border-slate-200",
   };
   const label: Record<string, string> = {
@@ -81,6 +82,7 @@ function StatusBadge({ status }: { status?: string }) {
     DIPROSES: "Diproses",
     DIKIRIM: "Dikirim",
     RETURNED: "Diretur",
+    RETURNED_SUCCESS: "Retur Berhasil",
     PENDING: "Pending",
   };
   const key = status?.toUpperCase() || "PENDING";
@@ -156,6 +158,12 @@ function detectCourier(resi: string): string | undefined {
 }
 
 function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
+  // 1. Deteksi apakah pernah ada status Retur/Gagal di riwayat mana pun
+  const hasReturnEvent = history?.some(event => {
+    const text = (event.description || event.status || event.title || "").toLowerCase();
+    return text.includes("returned") || text.includes("return") || text.includes("retur") || text.includes("gagal") || text.includes("dikembalikan");
+  });
+
   const latestText = (
     history?.[0]?.description ||
     history?.[0]?.status ||
@@ -163,12 +171,21 @@ function parseLiveStatus(raw?: string, history?: TrackingEvent[]): string {
     ""
   ).toLowerCase();
 
-  if (
-    latestText.includes("returned") ||
-    latestText.includes("return") ||
-    latestText.includes("retur")
-  )
+  // 2. Jika pernah retur, prioritaskan alur RETURNED
+  if (hasReturnEvent) {
+    if (
+      latestText.includes("delivered") ||
+      latestText.includes("diterima") ||
+      latestText.includes("sampai") ||
+      latestText.includes("success") ||
+      latestText.includes("selesai")
+    ) {
+      return "RETURNED_SUCCESS";
+    }
     return "RETURNED";
+  }
+
+  // 3. Alur Normal
   if (
     latestText.includes("delivered") ||
     latestText.includes("diterima") ||
@@ -382,7 +399,7 @@ export default function PengirimanPage() {
       ]);
       if (!cached) return;
       const liveStatus = parseLiveStatus(cached.status, cached.history);
-      if (liveStatus === "RETURNED") {
+      if (liveStatus === "RETURNED" || liveStatus === "RETURNED_SUCCESS") {
         const latestDesc =
           cached.history?.[0]?.description ||
           cached.history?.[0]?.status ||
@@ -509,7 +526,7 @@ export default function PengirimanPage() {
 
       // Deteksi retur otomatis dari data segar
       const liveStatus = parseLiveStatus(trackingData.status, trackingData.history);
-      if (liveStatus === "RETURNED") {
+      if (liveStatus === "RETURNED" || liveStatus === "RETURNED_SUCCESS") {
         const latestDesc =
           trackingData.history?.[0]?.description ||
           trackingData.history?.[0]?.status ||
@@ -603,7 +620,7 @@ export default function PengirimanPage() {
           trackingData.status,
           trackingData.history,
         );
-        if (liveStatus === "RETURNED") {
+        if (liveStatus === "RETURNED" || liveStatus === "RETURNED_SUCCESS") {
           const latestDesc =
             trackingData.history?.[0]?.description || "Paket Diretur";
           try {
