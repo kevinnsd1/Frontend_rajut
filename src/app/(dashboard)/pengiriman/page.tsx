@@ -28,7 +28,17 @@ import {
   X,
   RefreshCw,
   Zap,
+  ClipboardList,
+  FileDown,
+  Download,
+  Calendar,
+  ChevronRight,
+  FileSpreadsheet,
+  FileText,
+  Printer,
+  FileUp
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   Dialog,
   DialogContent,
@@ -120,9 +130,12 @@ const COURIERS = [
   { value: "jne", label: "JNE Express" },
   { value: "jnt", label: "J&T Express" },
   { value: "sicepat", label: "SiCepat" },
-  { value: "tiki", label: "TIKI" },
-  { value: "pos", label: "POS Indonesia" },
+  { value: "spx", label: "Shopee Express (SPX)" },
+  { value: "anteraja", label: "Anteraja" },
   { value: "ninja", label: "Ninja Xpress" },
+  { value: "pos", label: "POS Indonesia" },
+  { value: "tiki", label: "TIKI" },
+  { value: "wahana", label: "Wahana" },
 ];
 
 const DEFAULT_FORM: RegisterForm = { resi: "", courier: "jne" };
@@ -132,9 +145,11 @@ const DEFAULT_FORM: RegisterForm = { resi: "", courier: "jne" };
 function detectCourier(resi: string): string | undefined {
   if (!resi) return undefined;
   const upper = resi.toUpperCase().trim();
+  if (upper.startsWith("SPX")) return "spx";
   if (upper.startsWith("JX") || upper.startsWith("JP") || upper.startsWith("JD") || upper.startsWith("J&T")) return "jnt";
   if (upper.startsWith("JNE") || (upper.length === 15 && /^\d+$/.test(upper))) return "jne";
   if (upper.startsWith("00") && upper.length >= 11 && upper.length <= 12) return "sicepat";
+  if (upper.startsWith("1000") || upper.startsWith("ANTRJ")) return "anteraja";
   if (upper.startsWith("NLID") || upper.startsWith("NINJA")) return "ninja";
   if (upper.endsWith("ID") || (upper.length === 11 && /^\d+$/.test(upper))) return "pos";
   return undefined;
@@ -254,6 +269,64 @@ function translateDescription(text?: string): string {
   return text;
 }
 
+// ─── Export Helpers ───────────────────────────────────────────────────────────
+
+function groupShipmentsByDate(items: Shipment[]) {
+  const groups = items.reduce((acc, s) => {
+    const d = s.created_at ? new Date(s.created_at) : new Date();
+    // Gunakan format YYYY-MM-DD sebagai key murni
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+    
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push(s);
+    return acc;
+  }, {} as Record<string, Shipment[]>);
+
+  return Object.entries(groups)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, items]) => {
+      const dateStr = new Date(key).toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      });
+      return [dateStr, items] as [string, Shipment[]];
+    });
+}
+
+function handleExport(data: Shipment[], format: 'xlsx' | 'csv', fileName: string) {
+  const exportData = data.map(s => ({
+    "Tanggal Input": s.created_at ? new Date(s.created_at).toLocaleString("id-ID") : "-",
+    "Nomor Resi": s.resi_number,
+    "Kurir": s.courier?.toUpperCase(),
+    "Status Terakhir": s.last_status || "PENDING",
+    "Update Terakhir": s.last_updated ? new Date(s.last_updated).toLocaleString("id-ID") : "-",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Picking List");
+  
+  // Adjust column widths
+  const wscols = [
+    { wch: 25 }, // Tanggal Input
+    { wch: 20 }, // Nomor Resi
+    { wch: 15 }, // Kurir
+    { wch: 20 }, // Status Terakhir
+    { wch: 25 }, // Update Terakhir
+  ];
+  worksheet['!cols'] = wscols;
+
+  if (format === 'xlsx') {
+    XLSX.writeFile(workbook, `${fileName}.xlsx`);
+  } else {
+    XLSX.writeFile(workbook, `${fileName}.csv`, { bookType: 'csv' });
+  }
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 // TrackingTimeline moved to src/components/TrackingTimeline.tsx
@@ -277,7 +350,11 @@ export default function PengirimanPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(true);
+  const [isPickingListOpen, setIsPickingListOpen] = useState(false);
+  const [importedData, setImportedData] = useState<Shipment[]>([]);
+  const [pickingDateFilter, setPickingDateFilter] = useState<string>("all");
   const resiInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── React Query: daftar pengiriman ────────────────────────────────────────
   const {
@@ -582,6 +659,84 @@ export default function PengirimanPage() {
 
   const detailResi = detailItem?.resi_number;
 
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        const mapped: Shipment[] = data.map((row, idx) => {
+          // Cari kolom resi secara cerdas
+          const resiKey = Object.keys(row).find(k => 
+            k.toLowerCase().includes("resi") || 
+            k.toLowerCase().includes("order") || 
+            k.toLowerCase().includes("tracking")
+          );
+          
+          const courierKey = Object.keys(row).find(k => 
+            k.toLowerCase().includes("kurir") || 
+            k.toLowerCase().includes("ekspedisi") ||
+            k.toLowerCase().includes("courier")
+          );
+
+          const itemKey = Object.keys(row).find(k => 
+            k.toLowerCase().includes("item") || 
+            k.toLowerCase().includes("sku") ||
+            k.toLowerCase().includes("produk")
+          );
+
+          const dateKey = Object.keys(row).find(k => 
+            k.toLowerCase().includes("tanggal") || 
+            k.toLowerCase().includes("date") ||
+            k.toLowerCase().includes("waktu")
+          );
+
+          let rowDate = new Date().toISOString();
+          if (dateKey && row[dateKey]) {
+            const rawVal = row[dateKey];
+            let parsed: Date;
+            
+            if (rawVal instanceof Date) {
+              parsed = rawVal;
+            } else {
+              parsed = new Date(rawVal);
+            }
+
+            if (!isNaN(parsed.getTime())) {
+              // Normalisasi ke jam 00:00:00 hari tersebut agar grouping pas
+              rowDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).toISOString();
+            }
+          }
+
+          return {
+            id: `import-${idx}-${Date.now()}`,
+            resi_number: String(row[resiKey || ""] || row["Resi"] || "NO-RESI"),
+            courier: String(row[courierKey || ""] || "J&T"),
+            item_code: String(row[itemKey || ""] || "-"),
+            created_at: rowDate,
+            last_status: "PENDING",
+          };
+        });
+
+        setImportedData(mapped);
+        setPickingDateFilter("all"); // Reset filter saat baru import
+        setIsPickingListOpen(true);
+      } catch (err) {
+        alert("Gagal membaca file Excel. Pastikan formatnya benar.");
+      }
+    };
+    reader.readAsBinaryString(file);
+    // Reset input agar bisa upload file yang sama lagi
+    e.target.value = "";
+  };
+
   // Status live dari cache React Query
   const cachedTracking = detailResi
     ? queryClient.getQueryData<TrackingResponse>(["tracking", detailResi])
@@ -619,6 +774,28 @@ export default function PengirimanPage() {
             className="bg-white text-primary border border-primary/20 hover:bg-primary/5 rounded-xl shadow-sm font-bold"
           >
             <Plus className="mr-2 h-4 w-4" /> Input Manual
+          </Button>
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-xl shadow-sm font-bold"
+          >
+            <FileUp className="mr-2 h-4 w-4 text-emerald-600" /> Import Excel
+          </Button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".xlsx, .xls, .csv" 
+            onChange={handleImportExcel}
+          />
+          <Button
+            onClick={() => {
+              setImportedData([]); // Reset import saat buka dari dashboard
+              setIsPickingListOpen(true);
+            }}
+            className="bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm font-bold"
+          >
+            <ClipboardList className="mr-2 h-4 w-4 text-primary" /> Picking List
           </Button>
           <Button
             onClick={() => {
@@ -748,6 +925,270 @@ export default function PengirimanPage() {
                 </DialogFooter>
               </form>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Picking List Modal - PDF STYLE */}
+        <Dialog open={isPickingListOpen} onOpenChange={setIsPickingListOpen}>
+          <DialogContent className="rounded-none border-none shadow-none max-h-screen overflow-y-auto w-screen max-w-none p-0 bg-slate-100/80 backdrop-blur-sm print:bg-white print:p-0 print:m-0 print:max-h-none">
+            {/* Toolbar - Sticky and non-printing */}
+            <div className="sticky top-0 z-[60] bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between print:hidden">
+              <div className="flex items-center gap-4">
+                <Button 
+                  onClick={() => setIsPickingListOpen(false)}
+                  variant="ghost" 
+                  size="sm"
+                  className="rounded-lg hover:bg-slate-100 text-slate-500 font-bold"
+                >
+                  <X className="h-4 w-4 mr-2" /> Tutup
+                </Button>
+                <div className="h-6 w-[1px] bg-slate-200" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">Document Preview</h2>
+                  </div>
+                  
+                  {/* Date Filter */}
+                  <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-black text-slate-400 ml-2 uppercase">Filter:</span>
+                    <Select value={pickingDateFilter} onValueChange={setPickingDateFilter}>
+                      <SelectTrigger className="h-8 border-none bg-transparent shadow-none text-[11px] font-bold min-w-[140px] focus:ring-0">
+                        <SelectValue placeholder="Pilih Tanggal" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-slate-100 shadow-2xl">
+                        <SelectItem value="all" className="text-[11px] font-bold">Semua Tanggal</SelectItem>
+                        {groupShipmentsByDate(importedData.length > 0 ? importedData : shipments).map(([date]) => (
+                          <SelectItem key={date} value={date} className="text-[11px] font-bold">{date}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.print()}
+                  className="bg-white border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-2 text-primary" /> Cetak ke PDF
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleExport(shipments, 'xlsx', 'Picking_List_All')}
+                  className="bg-primary text-white rounded-xl text-xs font-bold hover:opacity-90 shadow-lg shadow-primary/20 transition-all"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> Export Excel
+                </Button>
+              </div>
+            </div>
+
+            {/* Document Container */}
+            <div id="picking-list-container" className="p-4 md:p-10 flex flex-col items-center gap-10 print:p-0 print:gap-0 bg-slate-100/50 min-h-screen print:bg-white print:block print:w-full">
+              {importedData.length === 0 && shipments.length === 0 ? (
+                <div className="bg-white w-full max-w-[210mm] p-20 rounded-3xl shadow-xl border border-slate-100 text-center flex flex-col items-center justify-center min-h-[400px]">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                    <Package className="h-10 w-10 text-slate-200" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">Belum Ada Data</h3>
+                  <p className="text-slate-400 text-sm max-w-[240px]">Silakan daftarkan pengiriman atau import file Excel untuk melihat picking list.</p>
+                </div>
+              ) : (
+                groupShipmentsByDate(importedData.length > 0 ? importedData : shipments)
+                  .filter(([date]) => pickingDateFilter === "all" || date === pickingDateFilter)
+                  .map(([date, items]) => (
+                  <div 
+                    key={date} 
+                    className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-[0_20px_50px_rgba(0,0,0,0.05)] p-[15mm] md:p-[20mm] relative flex flex-col print:shadow-none print:m-0 print:p-[10mm] print:break-after-page animate-in fade-in slide-in-from-bottom-8 duration-500"
+                  >
+                    {/* Header Section */}
+                    <div className="mb-12">
+                      <div className="flex justify-between items-start mb-8">
+                        <div>
+                          <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-1">Picking List</h1>
+                          <p className="text-xs font-bold text-primary uppercase tracking-[0.3em]">Warehouse Management</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full">
+                            <Calendar className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-[11px] font-black text-slate-800">{date}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-16 gap-y-3 text-[10px] text-slate-500 font-medium">
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Admin PIC:</span>
+                          <span className="font-bold text-slate-900">QueenyLook Official</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Order quantity:</span>
+                          <span className="font-bold text-slate-900">{items.length}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Print time:</span>
+                          <span className="font-bold text-slate-900">{new Date().toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Product quantity:</span>
+                          <span className="font-bold text-slate-900">{items.length}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Location:</span>
+                          <span className="font-bold text-slate-900">Main Warehouse</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-1.5">
+                          <span>Total Items:</span>
+                          <span className="font-bold text-slate-900 leading-none px-1.5 py-0.5 bg-primary/10 text-primary rounded">{items.length}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table Section */}
+                    <div className="flex-1">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-t-2 border-b-2 border-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-900 bg-slate-50/50">
+                            <th className="py-4 px-3 text-left w-10">No</th>
+                            <th className="py-4 px-3 text-left w-24">Image</th>
+                            <th className="py-4 px-3 text-left">Product Detail</th>
+                            <th className="py-4 px-3 text-left w-32">SKU / Code</th>
+                            <th className="py-4 px-3 text-center w-16">Qty</th>
+                            <th className="py-4 px-3 text-right">Order / Resi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-[11px]">
+                          {items.map((item, idx) => (
+                            <tr key={item.id || item.resi_number} className="border-b border-slate-100 group hover:bg-slate-50/30 transition-colors">
+                              <td className="py-5 px-3 align-top font-bold text-slate-300 group-hover:text-primary transition-colors">{idx + 1}</td>
+                              <td className="py-5 px-3 align-top">
+                                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-sm overflow-hidden group-hover:border-primary/20 transition-all">
+                                  <Package className="h-7 w-7 text-slate-200 group-hover:text-primary/20 transition-all" />
+                                </div>
+                              </td>
+                              <td className="py-5 px-3 align-top">
+                                <p className="font-black text-slate-900 uppercase tracking-tight leading-none mb-1 group-hover:text-primary transition-colors">
+                                  {item.item_code || "KODE_PRODUK_RAJUT"}
+                                </p>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Premium Collection QueenyLook</p>
+                              </td>
+                              <td className="py-5 px-3 align-top">
+                                <span className="font-mono text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                  {item.item_code || "PRD-2024"}
+                                </span>
+                              </td>
+                              <td className="py-5 px-3 align-top text-center">
+                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-white font-black text-sm shadow-lg shadow-slate-200">
+                                  1
+                                </span>
+                              </td>
+                              <td className="py-5 px-3 align-top text-right">
+                                <p className="font-black text-slate-900 tracking-tight text-xs leading-none mb-1">
+                                  {item.resi_number}
+                                </p>
+                                <span className="text-[9px] font-black uppercase text-primary bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
+                                  {item.courier}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer Section */}
+                    <div className="mt-16 pt-8 border-t-2 border-slate-900/5 flex justify-between items-end">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center shadow-xl">
+                            <span className="text-white font-black text-lg italic">Q</span>
+                          </div>
+                          <div>
+                            <p className="text-xs font-black tracking-tighter text-slate-900 leading-none">QUEENYLOOK</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Quality Guaranteed</p>
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-slate-300 font-medium">Picking list ini dihasilkan secara otomatis oleh sistem logistik QueenyLook pada {new Date().toLocaleString('id-ID')}.</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="inline-block px-10 py-4 border-2 border-slate-900 rounded-3xl">
+                          <p className="text-[8px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">Checked By</p>
+                          <div className="h-10" /> {/* Space for signature */}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Styles for Printing */}
+            <style jsx global>{`
+              @media print {
+                /* Sembunyikan elemen dashboard di belakang modal */
+                body > *:not([data-radix-portal]) {
+                  display: none !important;
+                }
+                
+                /* Reset styling dialog agar memenuhi halaman print */
+                [data-radix-portal] {
+                  display: block !important;
+                  position: absolute !important;
+                  top: 0 !important;
+                  left: 0 !important;
+                  width: 100% !important;
+                }
+
+                [role="dialog"] {
+                  position: relative !important;
+                  display: block !important;
+                  width: 100% !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  background: white !important;
+                  box-shadow: none !important;
+                }
+                
+                /* Sembunyikan overlay modal (overlay hitam) */
+                div[data-state="open"] > div[style*="background-color"] {
+                  display: none !important;
+                }
+
+                #picking-list-container {
+                  display: block !important;
+                  visibility: visible !important;
+                  width: 100% !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  background: white !important;
+                }
+
+                .print-hidden {
+                  display: none !important;
+                }
+
+                .print\\:break-after-page {
+                  break-after: page !important;
+                  page-break-after: always !important;
+                  margin-bottom: 0 !important;
+                }
+
+                @page {
+                  size: A4;
+                  margin: 10mm;
+                }
+
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                  color-adjust: exact !important;
+                }
+              }
+            `}</style>
           </DialogContent>
         </Dialog>
       </div>
